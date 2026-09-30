@@ -1,0 +1,15 @@
+# For pip users (uv users: `uv sync` — pyproject.toml is the source of truth,
+# this file mirrors it so both installers get the same stack).
+# Usage:
+#   python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#   python main.py --skip-install
+bandit>=1.9.4
+joblib>=1.6.0
+matplotlib>=3.11.2
+pandas>=3.0.6
+prefect>=3.8.6
+pytest>=9.1.1
+ruff>=0.16.9
+scikit-learn>=1.9.1
+seaborn>=0.13.2

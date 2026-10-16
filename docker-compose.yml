@@ -1,0 +1,106 @@
+# Customer Churn MLOps — the whole stack, locally.
+#
+#   frontend   Astro dashboard (nginx)         → http://localhost:4321
+#   backend    FastAPI prediction API          → http://localhost:8000
+#   prefect    orchestration server + UI       → http://localhost:4200
+#   worker     serves the daily deployments    (executes the flows)
+#   mlflow     experiment tracking + UI        → http://localhost:5000
+#
+# Run:  docker compose up --build
+# Then open http://localhost:4321 (the desk), trigger a run in Prefect,
+# watch it land in MLflow. Retrained models are written to ./models on the
+# host; `docker compose restart backend` picks them up.
+
+name: churn-mlops
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: twelvy1400/churn-mlops-backend:latest
+    ports:
+      - "8000:8000"
+    environment:
+      CORS_ORIGINS: "http://localhost:4321,http://127.0.0.1:4321"
+    volumes:
+      # The worker retrains into this folder; restart the backend to serve
+      # the fresh artifact.
+      - ./models:/opt/app/models
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the static bundle — the browser (not the container
+        # network) calls this URL.
+        PUBLIC_API_URL: http://localhost:8000
+    image: twelvy1400/churn-mlops-frontend:latest
+    ports:
+      - "4321:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  prefect-server:
+    image: prefecthq/prefect:3.8.8-python3.12
+    command: prefect server start --host 0.0.0.0
+    environment:
+      PREFECT_API_URL: http://127.0.0.1:4200/api
+    ports:
+      - "4200:4200"
+    volumes:
+      - prefect-data:/root/.prefect
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # Serves the daily deployments (and executes scheduled runs in-process —
+  # no separate `prefect worker` needed, see deploiement_prefect.py).
+  # Same image as `backend` (tag shared on purpose: one build, two roles).
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: twelvy1400/churn-mlops-backend:latest
+    command: python deploiement_prefect.py --container
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ./models:/opt/app/models
+      - ./notebooks/data:/opt/app/notebooks/data:ro
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.17.1
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts
+      --allowed-hosts mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    restart: unless-stopped
+
+volumes:
+  prefect-data:
+  mlflow-data:

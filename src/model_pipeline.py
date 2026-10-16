@@ -9,6 +9,9 @@ Pipeline jobs (in order):
     5. :func:`save_model` — joblib.dump(rf, "classifier.joblib")
     6. :func:`load_model` — joblib.load (alternative to re-training)
 
+Serving (not a training job, used by ``src/app.py``):
+    - :func:`predict_model` — single-row inference with validation.
+
 Notebook → module mapping:
     - job 1 has no notebook equivalent: notebooks assume the kernel already
       has the packages. The modular pipeline makes it explicit and
@@ -55,6 +58,7 @@ __all__ = [  # noqa: RUF022 — job order (1→6) is pedagogical, not alphabetic
     "evaluate_model",  # 4
     "save_model",  # 5
     "load_model",  # 6
+    "predict_model",  # serving helper for src/app.py
 ]
 
 # ---------------------------------------------------------------------------
@@ -348,3 +352,40 @@ def load_model(filepath: str | Path = DEFAULT_MODEL_PATH) -> RandomForestClassif
     model = joblib.load(filepath)
     print(f"Model loaded from {filepath}")
     return model
+
+
+def predict_model(
+    features: list[float] | tuple[float, ...],
+    model_path: str | Path = DEFAULT_MODEL_PATH,
+    model: RandomForestClassifier | None = None,
+) -> int:
+    """Predict churn for ONE customer (serving helper for ``src/app.py``).
+
+    Args:
+        features: 9 numeric values in :data:`FEATURE_COLS` order
+            (CreditScore, Gender, Age, Tenure, Balance, NumOfProducts,
+            HasCrCard, IsActiveMember, EstimatedSalary).
+            Gender is already encoded (Female=0, Male=1).
+        model_path: Model file used when ``model`` is not provided.
+        model: Optional pre-loaded model — lets the API load once at
+            startup instead of on every request.
+
+    Returns:
+        ``1`` if the customer is predicted to exit, else ``0``.
+
+    Raises:
+        ValueError: If ``features`` does not contain exactly 9 values.
+
+    Example:
+        >>> predict_model([850, 0, 43, 2, 125510.82, 1, 1, 1, 79084.10])
+        0
+    """
+    if len(features) != len(FEATURE_COLS):
+        raise ValueError(
+            f"Expected {len(FEATURE_COLS)} features in order {FEATURE_COLS}, "
+            f"got {len(features)}: {list(features)}"
+        )
+    if model is None:
+        model = load_model(model_path)
+    row = pd.DataFrame([list(features)], columns=FEATURE_COLS)
+    return int(model.predict(row)[0])

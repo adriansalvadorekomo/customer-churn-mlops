@@ -1,0 +1,118 @@
+---
+import "@fontsource-variable/archivo/standard.css";
+import "@fontsource/courier-prime/400.css";
+import "@fontsource/courier-prime/700.css";
+import "../styles/global.css";
+import DeskNav from "../components/DeskNav.astro";
+import ArrowUpRight from "../components/ArrowUpRight.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Churn Desk — customer churn decisioning",
+  description = "Score one bank customer's churn risk with the FastAPI model and read the verdict.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="min-h-dvh bg-desk-deep font-sans text-manila antialiased">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-manila focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink"
+      >Skip to content</a
+    >
+    <DeskNav />
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="mt-10 rule-t-desk">
+      <div
+        class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-5 py-8 md:flex-row md:items-end md:justify-between lg:px-8"
+      >
+        <div class="max-w-[62ch]">
+          <p class="text-sm leading-relaxed text-steel">
+            Customer Churn MLOps — the prediction console for a RandomForest
+            churn model, one visible layer of a small end-to-end stack.
+          </p>
+          <p class="mono-label mt-2 text-steel">
+            astro · fastapi · prefect · mlflow — all local, docker compose up
+          </p>
+        </div>
+        <ul class="mono-label flex flex-wrap gap-x-5 gap-y-2 text-steel">
+          <li>
+            <a
+              class="no-underline hover:text-manila"
+              href="https://github.com/adriansalvadorekomo/customer-churn-mlops"
+              target="_blank"
+              rel="noopener">source <ArrowUpRight /></a
+            >
+          </li>
+          <li>
+            <a
+              class="no-underline hover:text-manila"
+              href="https://github.com/adriansalvadorekomo/customer-churn-mlops/blob/main/docs/architecture.html"
+              target="_blank"
+              rel="noopener">pipeline map <ArrowUpRight /></a
+            >
+          </li>
+          <li>
+            <a
+              class="no-underline hover:text-manila"
+              href="http://localhost:8000/docs"
+              target="_blank"
+              rel="noopener">api docs <ArrowUpRight /></a
+            >
+          </li>
+        </ul>
+      </div>
+    </footer>
+
+    <script>
+      import { checkHealth } from "../lib/api";
+
+      const lamp = document.getElementById("api-lamp");
+      const lampText = document.getElementById("api-lamp-text");
+
+      function setLamp(state: "online" | "offline" | "checking") {
+        if (!lamp || !lampText) return;
+        lamp.dataset.state = state;
+        lampText.textContent =
+          state === "online"
+            ? "api online"
+            : state === "offline"
+              ? "api offline"
+              : "checking api";
+      }
+
+      async function refresh() {
+        setLamp("checking");
+        setLamp((await checkHealth()) ? "online" : "offline");
+      }
+
+      // Pages report a definitive API result after each prediction.
+      window.addEventListener("desk:api", (event) => {
+        const { ok } = (event as CustomEvent<{ ok: boolean }>).detail;
+        setLamp(ok ? "online" : "offline");
+      });
+
+      void refresh();
+      setInterval(() => void refresh(), 20000);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) void refresh();
+      });
+    </script>
+  </body>
+</html>

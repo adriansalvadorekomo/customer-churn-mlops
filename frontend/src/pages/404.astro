@@ -1,0 +1,30 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Churn Desk — Not on file">
+  <div class="mx-auto w-full max-w-2xl px-5 pt-16 lg:px-8">
+    <div class="case-file panel-paper p-8 text-center sm:p-10">
+      <p class="mono-label text-ink-soft">desk index · lookup failed</p>
+      <h1
+        class="mt-6 text-[2.35rem] font-extrabold leading-[1.02] tracking-[-0.022em] text-ink"
+      >
+        Nothing under that reference
+      </h1>
+      <div class="mt-6 flex justify-center">
+        <span class="stamp stamp--sm" data-verdict="leaves"
+          ><span class="stamp-text">not on file</span></span
+        >
+      </div>
+      <p class="mx-auto mt-6 max-w-[44ch] text-sm leading-relaxed text-ink-soft">
+        The desk checked its index and found no folder for this address. File a
+        case from the intake sheet instead.
+      </p>
+      <a
+        href="/"
+        class="mono-label mt-6 inline-block text-carbon underline decoration-dotted hover:text-ink"
+        >go to intake sheet →</a
+      >
+    </div>
+  </div>
+</Base>

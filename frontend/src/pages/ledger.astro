@@ -1,0 +1,129 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="Churn Desk — Ledger">
+  <div class="mx-auto w-full max-w-6xl px-5 pt-6 lg:px-8 lg:pt-8">
+    <section class="case-file panel-paper sheet-fit flex flex-col p-6 sm:p-8">
+      <div class="rule-b flex flex-wrap items-baseline justify-between gap-3 pb-3">
+        <span class="mono-label text-ink-soft">ledger · this browser</span>
+        <button type="button" id="void" class="btn-quiet">
+          void all cases
+        </button>
+      </div>
+
+      <h1
+        class="mt-6 text-[2.05rem] font-extrabold leading-[1.02] tracking-[-0.022em] text-ink sm:text-[2.5rem]"
+      >
+        Ledger
+      </h1>
+      <p class="mt-2 max-w-[62ch] text-[0.9rem] leading-relaxed text-ink-soft">
+        Every case this browser has scored, newest first. Records live in
+        <code class="font-mono text-[0.9em] text-carbon">localStorage</code> —
+        clearing site data erases them for good.
+      </p>
+
+      <p id="count" class="mono-label mt-5 text-ink-soft">0 cases on file</p>
+
+      <ol id="rows" class="mt-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto" hidden></ol>
+
+      <div
+        id="empty"
+        class="mt-5 flex flex-col items-center gap-3 rounded-[3px] border-2 border-dashed border-ink/30 px-6 py-14 text-center lg:min-h-0 lg:flex-1 lg:justify-center"
+      >
+        <p class="mono-label text-ink-soft">no cases on file</p>
+        <p class="max-w-[40ch] text-sm leading-relaxed text-ink-soft">
+          The intake desk has not scored anything yet.
+        </p>
+        <a
+          href="/"
+          class="mono-label text-carbon underline decoration-dotted hover:text-ink"
+          >go to intake sheet →</a
+        >
+      </div>
+    </section>
+  </div>
+
+  <template id="row-template">
+    <li class="rule-b py-4 last:border-b-0">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <span class="ledger-ref font-mono text-[0.82rem] text-carbon"></span>
+        <span class="ledger-when font-mono text-[0.72rem] text-ink-soft"></span>
+      </div>
+      <div class="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <span class="ledger-summary font-mono text-[0.82rem] text-ink"></span>
+        <span class="stamp stamp--sm shrink-0" data-verdict="">
+          <span class="stamp-text"></span>
+        </span>
+      </div>
+    </li>
+  </template>
+</Base>
+
+<script>
+  import {
+    clearLedger,
+    formatWhen,
+    loadLedger,
+    summarize,
+  } from "../lib/history";
+
+  const rows = document.getElementById("rows") as HTMLOListElement;
+  const empty = document.getElementById("empty")!;
+  const count = document.getElementById("count")!;
+  const voidButton = document.getElementById("void") as HTMLButtonElement;
+  const template = document.getElementById("row-template") as HTMLTemplateElement;
+
+  let armed = false;
+  let armTimer = 0;
+
+  function disarm() {
+    armed = false;
+    voidButton.removeAttribute("data-arming");
+    voidButton.textContent = "void all cases";
+    clearTimeout(armTimer);
+  }
+
+  function render() {
+    const entries = loadLedger();
+    rows.replaceChildren();
+
+    count.textContent = `${entries.length} ${
+      entries.length === 1 ? "case" : "cases"
+    } on file`;
+    empty.hidden = entries.length > 0;
+    rows.hidden = entries.length === 0;
+
+    for (const entry of entries) {
+      const row = template.content.cloneNode(true) as DocumentFragment;
+
+      row.querySelector(".ledger-ref")!.textContent = entry.ref;
+      row.querySelector(".ledger-when")!.textContent = formatWhen(entry.ts);
+      row.querySelector(".ledger-summary")!.textContent = summarize(
+        entry.customer,
+      );
+
+      const stamp = row.querySelector<HTMLElement>(".stamp")!;
+      stamp.dataset.verdict = entry.exited === 1 ? "leaves" : "stays";
+      stamp.querySelector(".stamp-text")!.textContent =
+        entry.exited === 1 ? "Leaves" : "Stays";
+
+      rows.appendChild(row);
+    }
+  }
+
+  voidButton.addEventListener("click", () => {
+    if (!armed) {
+      armed = true;
+      voidButton.setAttribute("data-arming", "");
+      voidButton.textContent = "confirm void";
+      armTimer = window.setTimeout(disarm, 4000);
+      return;
+    }
+    clearLedger();
+    disarm();
+    render();
+  });
+
+  render();
+</script>

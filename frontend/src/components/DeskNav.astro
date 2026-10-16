@@ -1,0 +1,76 @@
+---
+import ArrowUpRight from "./ArrowUpRight.astro";
+
+const path = (Astro.url.pathname.replace(/\/+$/, "") || "/") as string;
+
+const tabs = [
+  { href: "/", label: "Intake sheet", key: "/" },
+  { href: "/ledger/", label: "Ledger", key: "/ledger" },
+  { href: "/report/", label: "Model report", key: "/report" },
+];
+
+const isActive = (key: string) =>
+  key === "/" ? path === "/" : path === key || path.startsWith(`${key}/`);
+---
+
+<header class="bg-desk-deep">
+  <div
+    class="mx-auto flex w-full max-w-6xl flex-wrap items-end justify-between gap-x-8 gap-y-4 px-5 pt-5 lg:px-8"
+  >
+    <div>
+      <a
+        href="/"
+        class="font-sans text-[1.45rem] font-extrabold leading-none tracking-[-0.015em] text-manila no-underline font-stretch-[116%]"
+      >
+        CHURN<span class="text-stamp-red">·</span>DESK
+      </a>
+      <p class="mono-label mt-2 text-steel">
+        customer retention decisioning — mlops workshop build
+      </p>
+    </div>
+
+    <div class="flex flex-col items-start gap-2 sm:items-end">
+      <span id="api-lamp" class="lamp mono-label" data-state="checking">
+        <span class="lamp-dot"></span>
+        <span id="api-lamp-text">checking api</span>
+      </span>
+      <nav class="mono-label flex flex-wrap gap-x-5 gap-y-1 text-steel" aria-label="Stack">
+        <a
+          class="no-underline hover:text-manila"
+          href="http://localhost:4200"
+          target="_blank"
+          rel="noopener">pipeline <ArrowUpRight /></a
+        >
+        <a
+          class="no-underline hover:text-manila"
+          href="http://localhost:5000"
+          target="_blank"
+          rel="noopener">runs <ArrowUpRight /></a
+        >
+        <a
+          class="no-underline hover:text-manila"
+          href="http://localhost:8000/docs"
+          target="_blank"
+          rel="noopener">api docs <ArrowUpRight /></a
+        >
+      </nav>
+    </div>
+  </div>
+
+  <nav
+    class="tab-scroll mx-auto mt-4 flex w-full max-w-6xl gap-1.5 px-5 lg:px-8 rule-b-desk"
+    aria-label="Sections"
+  >
+    {
+      tabs.map((tab) => (
+        <a
+          class="tab"
+          href={tab.href}
+          aria-current={isActive(tab.key) ? "page" : undefined}
+        >
+          {tab.label}
+        </a>
+      ))
+    }
+  </nav>
+</header>

@@ -1,0 +1,23 @@
+# Backend build context — keep the image lean.
+.venv/
+.git/
+.gitignore
+.gitattributes
+
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Docs, data, frontend and local state are not baked into the image:
+# the worker mounts notebooks/data + models at runtime.
+docs/
+notebooks/
+frontend/
+visual-check/
+.impeccable/
+prefect-data/
+mlflow-data/
+mlruns/
+models/*.tmp

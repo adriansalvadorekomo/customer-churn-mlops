@@ -1,0 +1,15 @@
+---
+interface Props {
+  text: string;
+  verdict: "leaves" | "stays";
+  meta?: string;
+  size?: "lg" | "sm";
+}
+
+const { text, verdict, meta, size = "lg" } = Astro.props;
+---
+
+<span class:list={["stamp", size === "sm" && "stamp--sm"]} data-verdict={verdict}>
+  <span class="stamp-text">{text}</span>
+  {meta && <span class="stamp-meta">{meta}</span>}
+</span>

@@ -1,0 +1,68 @@
+---
+interface Option {
+  value: string;
+  label: string;
+}
+
+interface Props {
+  name: string;
+  label: string;
+  note: string;
+  kind?: "number" | "select";
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: Option[];
+}
+
+const {
+  name,
+  label,
+  note,
+  kind = "number",
+  min,
+  max,
+  step,
+  options = [],
+} = Astro.props;
+
+const inputId = `f-${name}`;
+const noteId = `${inputId}-note`;
+const errorId = `${inputId}-error`;
+const describedBy = `${noteId} ${errorId}`;
+---
+
+<div class="field" data-field={name}>
+  <label class="field-label" for={inputId}>{label}</label>
+  {
+    kind === "select" ? (
+      <select
+        id={inputId}
+        class="field-input"
+        name={name}
+        required
+        aria-describedby={describedBy}
+      >
+        {options.map((option) => (
+          <option value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    ) : (
+      <input
+        id={inputId}
+        class="field-input"
+        type="number"
+        name={name}
+        min={min}
+        max={max}
+        step={step ?? "any"}
+        required
+        inputmode={step === 1 ? "numeric" : "decimal"}
+        autocomplete="off"
+        aria-describedby={describedBy}
+      />
+    )
+  }
+  <span class="field-note" id={noteId}>{note}</span>
+  <span class="field-error" id={errorId} data-error hidden></span>
+</div>

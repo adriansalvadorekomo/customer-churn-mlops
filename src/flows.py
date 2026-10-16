@@ -40,6 +40,7 @@ from src.tasks import (
     train_task,
     unittest_task,
 )
+from src.tracking import log_training_run
 
 # Same demo customer as main.py / the notebook's manual predict cell.
 DEMO_SAMPLE = [[850, 0, 43, 2, 125510.82, 1, 1, 1, 79084.10]]
@@ -93,6 +94,15 @@ def all_flow(
     metrics = evaluate_task(model, X_test, y_test)
     saved_path = save_task(model, filepath=model_path)
 
+    # Track every training run in MLflow (params + accuracy + model).
+    # A tracking outage is a warning, never a pipeline failure.
+    log_training_run(
+        model,
+        X_test,
+        y_test,
+        {"n_estimators": n_estimators, "test_size": test_size},
+    )
+
     # Job 6 — prove the saved artifact reloads and predicts.
     reloaded = load_task(filepath=model_path)
     demo_pred = reloaded.predict(pd.DataFrame(DEMO_SAMPLE, columns=FEATURE_COLS))
@@ -119,13 +129,22 @@ def train_flow(
     """Prepare the data and train the model, then save it."""
     _maybe_fetch(fetch_code, repo_url, branch)
 
-    X_train, X_test, y_train, _y_test = prepare_task(csv_path=data, test_size=test_size)
+    X_train, X_test, y_train, y_test = prepare_task(csv_path=data, test_size=test_size)
     model = train_task(X_train, y_train, n_estimators=n_estimators)
     saved_path = save_task(model, filepath=model_path)
+
+    # Track every training run in MLflow (params + accuracy + model).
+    accuracy = log_training_run(
+        model,
+        X_test,
+        y_test,
+        {"n_estimators": n_estimators, "test_size": test_size},
+    )
     return {
         "train_shape": list(X_train.shape),
         "test_shape": list(X_test.shape),
         "model_path": saved_path,
+        "accuracy": accuracy,
     }
 
 

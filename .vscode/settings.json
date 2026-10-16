@@ -1,0 +1,17 @@
+{
+  // Use the project's uv-managed virtualenv so Pylance resolves
+  // third-party imports (pandas, prefect, sklearn, ...).
+  // Equivalent manual step: Ctrl+Shift+P → "Python: Select Interpreter" → ./.venv/bin/python
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  // Auto-activate .venv in new integrated terminals.
+  "python.terminal.activateEnvironment": true,
+  // pytest is configured in pyproject.toml ([tool.pytest.ini_options]).
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.pytestEnabled": true,
+  // Keep the explorer tidy.
+  "files.exclude": {
+    "**/.ruff_cache": true,
+    "**/.pytest_cache": true,
+    "**/__pycache__": true
+  }
+}

@@ -17,3 +17,15 @@ wheels/
 # Prefect local state (server stores its DB under ~/.prefect)
 .prefect/
 visual-check/*
+
+# MLflow local file store (docker uses the mlflow-data volume instead)
+mlruns/
+mlflow-data/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.astro/
+
+# Design tooling state (PRODUCT.md / DESIGN.md stay tracked)
+.impeccable/

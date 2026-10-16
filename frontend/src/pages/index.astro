@@ -1,0 +1,572 @@
+---
+import Base from "../layouts/Base.astro";
+import Field from "../components/Field.astro";
+import Stamp from "../components/Stamp.astro";
+
+const groups = [
+  {
+    id: "grid-customer",
+    name: "Customer",
+    fields: [
+      {
+        name: "CreditScore",
+        label: "Credit score",
+        note: "score on file · 300–900",
+        min: 300,
+        max: 900,
+        step: 1,
+      },
+      {
+        name: "Gender",
+        label: "Gender",
+        note: "as coded in the dataset",
+        kind: "select" as const,
+        options: [
+          { value: "0", label: "Female (0)" },
+          { value: "1", label: "Male (1)" },
+        ],
+      },
+      { name: "Age", label: "Age", note: "years", min: 18, max: 100, step: 1 },
+    ],
+  },
+  {
+    id: "grid-account",
+    name: "Account",
+    fields: [
+      {
+        name: "Tenure",
+        label: "Tenure",
+        note: "months with the bank · 0–10",
+        min: 0,
+        max: 10,
+        step: 1,
+      },
+      {
+        name: "Balance",
+        label: "Balance",
+        note: "account balance · USD",
+        min: 0,
+        step: 0.01,
+      },
+      {
+        name: "NumOfProducts",
+        label: "Products",
+        note: "bank products held · 1–4",
+        min: 1,
+        max: 4,
+        step: 1,
+      },
+    ],
+  },
+  {
+    id: "grid-relationship",
+    name: "Relationship",
+    fields: [
+      {
+        name: "HasCrCard",
+        label: "Credit card",
+        note: "holds a card",
+        kind: "select" as const,
+        options: [
+          { value: "1", label: "Yes (1)" },
+          { value: "0", label: "No (0)" },
+        ],
+      },
+      {
+        name: "IsActiveMember",
+        label: "Active member",
+        note: "active in the last month",
+        kind: "select" as const,
+        options: [
+          { value: "1", label: "Yes (1)" },
+          { value: "0", label: "No (0)" },
+        ],
+      },
+      {
+        name: "EstimatedSalary",
+        label: "Estimated salary",
+        note: "estimated · USD",
+        min: 0,
+        step: 0.01,
+      },
+    ],
+  },
+];
+---
+
+<Base title="Churn Desk — Intake">
+  <div
+    class="mx-auto grid w-full max-w-6xl grid-cols-1 gap-8 px-5 pt-6 sheet-fit lg:grid-cols-12 lg:px-8 lg:pt-8"
+  >
+    <section class="lg:col-span-7 lg:min-h-0">
+      <form
+        id="intake"
+        class="case-file panel-paper flex h-full flex-col p-6 sm:p-8"
+        novalidate
+        autocomplete="off"
+      >
+        <div class="rule-b flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 pb-3">
+          <span class="mono-label text-ink-soft">intake sheet · churn model</span>
+          <span class="flex items-baseline gap-3">
+            <span class="mono-label text-carbon">form cd-26</span>
+            <button type="button" id="sample" class="btn-quiet">
+              load sample case
+            </button>
+          </span>
+        </div>
+
+        <h1
+          class="mt-4 text-[2.05rem] font-extrabold leading-[1.02] tracking-[-0.022em] text-ink sm:text-[2.4rem]"
+        >
+          Will this customer leave?
+        </h1>
+        <p class="desk-optional mt-2 max-w-[62ch] text-[0.9rem] leading-relaxed text-ink-soft">
+          One customer per case. Fill the intake sheet and the desk returns a
+          churn verdict from the model behind
+          <code class="font-mono text-[0.9em] text-carbon">POST /predict</code>.
+        </p>
+        <p id="sample-note" class="mono-label mt-2 text-ink-soft" hidden>
+          sample: dataset case — recorded outcome: stayed
+        </p>
+
+        <div class="mt-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+          {
+            groups.map((group) => (
+              <div
+                role="group"
+                aria-labelledby={group.id}
+                class="mt-4 first:mt-0"
+              >
+                <p
+                  id={group.id}
+                  class="group-rule text-[0.7rem] font-bold uppercase tracking-[0.16em] text-ink"
+                >
+                  {group.name}
+                </p>
+                <div class="mt-3 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
+                  {group.fields.map((field) => (
+                    <Field {...field} />
+                  ))}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+
+        <div class="rule-t mt-3 flex flex-wrap items-center gap-x-5 gap-y-3 pt-3">
+          <button type="submit" id="decide" class="btn-desk">Decide</button>
+          <span class="desk-optional mono-label text-ink-soft"
+            >stored locally in your ledger — nothing else leaves the
+            machine</span
+          >
+        </div>
+      </form>
+    </section>
+
+    <aside class="flex flex-col gap-4 lg:col-span-5 lg:min-h-0">
+      <div class="panel-desk flex flex-col p-6 lg:min-h-0 lg:flex-1">
+        <div class="rule-b-desk flex items-baseline justify-between gap-3 pb-3">
+          <span class="mono-label text-steel">result pan</span>
+          <span id="result-status" class="mono-label text-steel"
+            >awaiting case</span
+          >
+        </div>
+
+        <div
+          id="verdict"
+          aria-live="polite"
+          class="mt-5 flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+        >
+          <div
+            data-state="empty"
+            class="flex min-h-[16rem] flex-col lg:min-h-0 items-center justify-center gap-3 rounded-[3px] border-2 border-dashed border-steel-dark px-6 py-12 text-center lg:flex-1"
+          >
+            <p class="mono-label text-steel">awaiting a case</p>
+            <p class="max-w-[38ch] text-sm leading-relaxed text-steel">
+              Fill the intake sheet on the left, then press
+              <span class="text-manila">Decide</span>.
+            </p>
+          </div>
+
+          <div
+            data-state="loading"
+            hidden
+            class="flex min-h-[16rem] flex-col lg:min-h-0 justify-center gap-2.5 px-1 lg:flex-1"
+          >
+            <p class="stage-line caret" data-stage-line>case received</p>
+            <p class="stage-line" data-stage-line hidden>
+              contacting decision api…
+            </p>
+            <p class="stage-line" data-stage-line hidden>scoring case…</p>
+          </div>
+
+          <div
+            data-state="result"
+            hidden
+            class="flex min-h-[16rem] flex-col lg:min-h-0 items-center justify-center gap-6 lg:flex-1"
+          >
+            <div data-stamp="leaves" hidden><Stamp text="Leaves" verdict="leaves" meta="exit = 1" /></div>
+            <div data-stamp="stays" hidden><Stamp text="Stays" verdict="stays" meta="exit = 0" /></div>
+            <div class="text-center">
+              <p class="mono-label text-steel">
+                case <span id="res-ref" class="text-manila">—</span>
+              </p>
+              <p id="res-line" class="mt-2 font-mono text-sm text-steel"></p>
+            </div>
+            <details class="w-full">
+              <summary
+                class="mono-label cursor-pointer text-steel underline decoration-dotted hover:text-manila"
+              >
+                request receipt
+              </summary>
+              <pre
+                id="receipt"
+                class="mt-3 max-h-56 overflow-auto rounded-[2px] bg-manila p-3 font-mono text-[0.7rem] leading-relaxed text-carbon"></pre>
+            </details>
+          </div>
+
+          <div
+            data-state="error"
+            hidden
+            class="flex min-h-[16rem] flex-col lg:min-h-0 items-center justify-center gap-4 px-3 text-center lg:flex-1"
+          >
+            <span class="stamp stamp--sm" data-verdict="leaves"
+              ><span class="stamp-text">no answer</span></span
+            >
+            <p class="mono-label text-lamp-red">the desk got no verdict</p>
+            <p id="error-detail" class="max-w-[44ch] font-mono text-xs leading-relaxed text-steel"></p>
+            <p class="max-w-[44ch] text-sm leading-relaxed text-steel">
+              Start the backend with
+              <code class="font-mono text-xs text-manila"
+                >uv run uvicorn src.app:app</code
+              >
+              — or run the whole desk with
+              <code class="font-mono text-xs text-manila">docker compose up</code>.
+            </p>
+          </div>
+        </div>
+
+        <dl class="mt-6 space-y-2.5">
+          <div class="flex items-baseline justify-between gap-4">
+            <dt class="mono-label text-steel">model</dt>
+            <dd class="font-mono text-sm text-manila">RandomForest · 100 trees</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-4">
+            <dt class="mono-label text-steel">holdout accuracy</dt>
+            <dd class="font-mono text-sm text-manila">85.55% · 2,000 cases</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-4">
+            <dt class="mono-label text-steel">churner recall</dt>
+            <dd class="font-mono text-sm text-manila">0.42 — stated, not buried</dd>
+          </div>
+          <div class="flex items-baseline justify-between gap-4">
+            <dt class="mono-label text-steel">full dossier</dt>
+            <dd>
+              <a
+                href="/report/"
+                class="mono-label text-manila underline decoration-dotted hover:text-steel"
+                >model report →</a
+              >
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <p class="max-w-[60ch] text-[0.85rem] leading-relaxed text-steel">
+        The desk is a thin client: one call to the FastAPI service per case,
+        verdicts filed in this browser's ledger. The model misses more churners
+        than it catches (recall 0.42) — the
+        <a
+          href="/report/"
+          class="text-manila underline decoration-dotted hover:text-steel"
+          >report</a
+        >
+        explains where that shows up.
+      </p>
+    </aside>
+  </div>
+</Base>
+
+<script>
+  import { fetchPrediction, type Customer } from "../lib/api";
+  import { appendEntry, loadLedger, makeRef } from "../lib/history";
+
+  const SAMPLE: Customer = {
+    CreditScore: 850,
+    Gender: 0,
+    Age: 43,
+    Tenure: 2,
+    Balance: 125510.82,
+    NumOfProducts: 1,
+    HasCrCard: 1,
+    IsActiveMember: 1,
+    EstimatedSalary: 79084.1,
+  };
+
+  const RULES: Record<
+    string,
+    { min?: number; max?: number; integer?: boolean; what: string }
+  > = {
+    CreditScore: { min: 300, max: 900, integer: true, what: "300–900 expected." },
+    Age: { min: 18, max: 100, integer: true, what: "18–100 expected." },
+    Tenure: { min: 0, max: 10, integer: true, what: "0–10 months expected." },
+    Balance: { min: 0, what: "cannot be negative." },
+    NumOfProducts: { min: 1, max: 4, integer: true, what: "1–4 expected." },
+    EstimatedSalary: { min: 0, what: "cannot be negative." },
+  };
+
+  const FIELDS = [
+    "CreditScore",
+    "Gender",
+    "Age",
+    "Tenure",
+    "Balance",
+    "NumOfProducts",
+    "HasCrCard",
+    "IsActiveMember",
+    "EstimatedSalary",
+  ] as const;
+
+  const form = document.getElementById("intake") as HTMLFormElement;
+  const decide = document.getElementById("decide") as HTMLButtonElement;
+  const sampleButton = document.getElementById("sample") as HTMLButtonElement;
+  const sampleNote = document.getElementById("sample-note")!;
+  const status = document.getElementById("result-status")!;
+  const verdict = document.getElementById("verdict")!;
+  const resRef = document.getElementById("res-ref")!;
+  const resLine = document.getElementById("res-line")!;
+  const receipt = document.getElementById("receipt")!;
+  const errorDetail = document.getElementById("error-detail")!;
+  const stageLines = Array.from(
+    verdict.querySelectorAll<HTMLElement>("[data-stage-line]"),
+  );
+  const stampNodes = Array.from(
+    verdict.querySelectorAll<HTMLElement>("[data-stamp]"),
+  );
+
+  const reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  function setState(name: "empty" | "loading" | "result" | "error") {
+    for (const el of verdict.querySelectorAll<HTMLElement>("[data-state]")) {
+      el.hidden = el.dataset.state !== name;
+    }
+    status.textContent =
+      name === "empty"
+        ? "awaiting case"
+        : name === "loading"
+          ? "scoring"
+          : name === "result"
+            ? "filed"
+            : "failed";
+  }
+
+  function fieldInput(name: string): HTMLInputElement | HTMLSelectElement | null {
+    const el = form.elements.namedItem(name);
+    return el instanceof HTMLInputElement || el instanceof HTMLSelectElement
+      ? el
+      : null;
+  }
+
+  function readCustomer(): Customer {
+    const customer = {} as Customer;
+    for (const name of FIELDS) {
+      customer[name] = Number(fieldInput(name)?.value);
+    }
+    return customer;
+  }
+
+  function clearFieldError(name: string) {
+    const wrapper = form.querySelector(`[data-field="${name}"]`);
+    wrapper?.removeAttribute("data-invalid");
+    wrapper
+      ?.querySelector<HTMLElement>("input, select")
+      ?.removeAttribute("aria-invalid");
+    const error = wrapper?.querySelector<HTMLElement>("[data-error]");
+    if (error) {
+      error.hidden = true;
+      error.textContent = "";
+    }
+  }
+
+  function setFieldError(name: string, message: string) {
+    const wrapper = form.querySelector(`[data-field="${name}"]`);
+    wrapper?.setAttribute("data-invalid", "");
+    wrapper
+      ?.querySelector<HTMLElement>("input, select")
+      ?.setAttribute("aria-invalid", "true");
+    const error = wrapper?.querySelector<HTMLElement>("[data-error]");
+    if (error) {
+      error.hidden = false;
+      error.textContent = message;
+    }
+  }
+
+  function validate(customer: Customer): string[] {
+    const invalid: string[] = [];
+    for (const name of FIELDS) {
+      clearFieldError(name);
+      const rule = RULES[name];
+      const el = fieldInput(name);
+      if (!el) continue;
+      const raw = el.value;
+      const value = customer[name];
+      if (raw === "" || Number.isNaN(value)) {
+        setFieldError(name, "required.");
+        invalid.push(name);
+        continue;
+      }
+      if (rule) {
+        if (rule.min !== undefined && value < rule.min) {
+          setFieldError(name, rule.what);
+          invalid.push(name);
+        } else if (rule.max !== undefined && value > rule.max) {
+          setFieldError(name, rule.what);
+          invalid.push(name);
+        } else if (rule.integer && !Number.isInteger(value)) {
+          setFieldError(name, "whole number expected.");
+          invalid.push(name);
+        }
+      }
+    }
+    return invalid;
+  }
+
+  /* — the arrival cascade: staged lines, then the stamp lands ———————— */
+
+  const stageTimers: number[] = [];
+
+  function startStages() {
+    stageTimers.splice(0).forEach((t) => clearTimeout(t));
+    stageLines.forEach((line, index) => {
+      line.hidden = index !== 0;
+      line.classList.toggle("caret", index === 0);
+    });
+    if (reduceMotion) return;
+    for (let i = 1; i < stageLines.length; i += 1) {
+      stageTimers.push(
+        window.setTimeout(() => {
+          stageLines[i - 1]?.classList.remove("caret");
+          stageLines[i].hidden = false;
+          stageLines[i].classList.add("caret");
+        }, i * 230),
+      );
+    }
+  }
+
+  async function settleStages(startedAt: number) {
+    stageTimers.splice(0).forEach((t) => clearTimeout(t));
+    const minimum = reduceMotion ? 0 : 720;
+    const elapsed = performance.now() - startedAt;
+    if (elapsed < minimum) {
+      await new Promise((resolve) => setTimeout(resolve, minimum - elapsed));
+    }
+    stageLines.forEach((line) => {
+      line.hidden = true;
+      line.classList.remove("caret");
+    });
+  }
+
+  function renderResult(exited: number, ref: string, customer: Customer) {
+    const key = exited === 1 ? "leaves" : "stays";
+    for (const node of stampNodes) {
+      const show = node.dataset.stamp === key;
+      node.hidden = !show;
+      if (show) {
+        const stamp = node.querySelector<HTMLElement>(".stamp");
+        if (stamp && !reduceMotion) {
+          stamp.classList.remove("stamp--landing");
+          void stamp.offsetWidth; // restart the landing animation
+          stamp.classList.add("stamp--landing");
+          stamp.addEventListener(
+            "animationend",
+            () => stamp.classList.remove("stamp--landing"),
+            { once: true },
+          );
+        }
+      }
+    }
+    resRef.textContent = ref;
+    resLine.textContent = `POST /predict → exited = ${exited}`;
+    receipt.textContent = JSON.stringify(
+      { request: customer, response: { exited } },
+      null,
+      2,
+    );
+    setState("result");
+    // The verdict lands off-screen when the sheet was long: bring it into
+    // view without stealing focus (the live region announces it).
+    verdict.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "nearest",
+    });
+  }
+
+  /* — wiring ————————————————————————————————————————— */
+
+  sampleButton.addEventListener("click", () => {
+    for (const [name, value] of Object.entries(SAMPLE)) {
+      const el = fieldInput(name);
+      if (el) {
+        el.value = String(value);
+        clearFieldError(name);
+      }
+    }
+    sampleNote.hidden = false;
+  });
+
+  form.addEventListener("input", (event) => {
+    const target = event.target as HTMLElement;
+    sampleNote.hidden = true;
+    const wrapper = target.closest("[data-field]");
+    if (wrapper) clearFieldError(wrapper.getAttribute("data-field") ?? "");
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (decide.disabled) return;
+
+    const customer = readCustomer();
+    const invalid = validate(customer);
+    if (invalid.length) {
+      fieldInput(invalid[0] as string)?.focus();
+      return;
+    }
+
+    const ts = Date.now();
+    const ref = makeRef(ts, loadLedger().length + 1);
+
+    decide.disabled = true;
+    decide.textContent = "scoring…";
+    setState("loading");
+    startStages();
+
+    const startedAt = performance.now();
+
+    void fetchPrediction(customer)
+      .then(async (exited) => {
+        await settleStages(startedAt);
+        renderResult(exited, ref, customer);
+        appendEntry({ ref, ts, exited, customer });
+        window.dispatchEvent(
+          new CustomEvent("desk:api", { detail: { ok: true } }),
+        );
+      })
+      .catch(async (error: unknown) => {
+        await settleStages(startedAt);
+        const message = error instanceof Error ? error.message : String(error);
+        errorDetail.textContent = message;
+        setState("error");
+        window.dispatchEvent(
+          new CustomEvent("desk:api", {
+            detail: { ok: message.startsWith("HTTP") },
+          }),
+        );
+      })
+      .finally(() => {
+        decide.disabled = false;
+        decide.textContent = "Decide";
+      });
+  });
+</script>

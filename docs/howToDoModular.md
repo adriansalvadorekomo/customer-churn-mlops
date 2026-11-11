@@ -24,7 +24,7 @@ c'est qu'elle est bien découpée. C'est ça, la technique Feynman.
 Notre résultat dans ce projet :
 
 ```text
-workshop_ml/
+customer-churn-mlops/
   src/
     model_pipeline.py   # les 6 fonctions (la recette)
   main.py               # le chef qui exécute la recette

@@ -14,7 +14,7 @@ fetch to the FastAPI backend; no server runtime).
 ## Users
 
 *(Inferred from the brief — labeled assumption.)* The primary user is the
-engineer/analyst evaluating this workshop project: comfortable with APIs but
+engineer/analyst evaluating this personal project: comfortable with APIs but
 willing to skip Swagger when a faster surface exists. Secondary: anyone the
 project is demoed to (reviewers, classmates, recruiters) who needs to see the
 model working in seconds without reading code.
@@ -50,7 +50,7 @@ surface, metrics is the evidence surface.
   confusion matrix [[1535, 50], [239, 176]], per-class precision/recall.
 - Backend contract is fixed: `POST /predict` takes the 9 preprocessed
   numeric fields, returns `{"exited": 0|1}`; `GET /health` → `{"status":"ok"}`.
-- No authentication (workshop scope), no data leaves the browser except the
+- No authentication (personal-project scope), no data leaves the browser except the
   single prediction request.
 - API base configured by `PUBLIC_API_URL` at build time.
 

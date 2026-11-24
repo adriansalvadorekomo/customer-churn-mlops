@@ -346,7 +346,15 @@ class Canvas:
         )
         self.nodes.append("".join(g))
 
-    def zone(self, b: Box, label: str, sub: str | None = None, at: str = "top"):
+    def zone(
+        self,
+        b: Box,
+        label: str,
+        sub: str | None = None,
+        at: str = "top",
+        lx: float | None = None,
+    ):
+        """Dashed boundary; its label sits on the top or bottom edge, at x = lx (default: left)."""
         t = self.t
         g = [
             (
@@ -358,16 +366,17 @@ class Canvas:
             self.fonts["mono"].width("  " + sub, 12) if sub else 0
         )
         ly = b.y if at == "top" else b.b
-        self.g_fixed.append((label, Box(b.x + 16, ly - 10, lw + 16, 20)))
+        x0 = b.x + 16 if lx is None else lx
+        self.g_fixed.append((label, Box(x0, ly - 10, lw + 16, 20)))
         g.append(
-            f'<rect x="{num(b.x + 16)}" y="{num(ly - 10)}" width="{num(lw + 16)}" height="20" fill="{t["panel"]}"/>'
+            f'<rect x="{num(x0)}" y="{num(ly - 10)}" width="{num(lw + 16)}" height="20" fill="{t["panel"]}"/>'
         )
-        g.append(self.monom(label, b.x + 24, ly + 4, 12, t["ink"], track=0.1))
+        g.append(self.monom(label, x0 + 8, ly + 4, 12, t["ink"], track=0.1))
         if sub:
             g.append(
                 self.mono(
                     "  " + sub,
-                    b.x + 24 + self.fonts["mono_md"].width(label, 12, 0.1),
+                    x0 + 8 + self.fonts["mono_md"].width(label, 12, 0.1),
                     ly + 4,
                     12,
                 )
@@ -588,6 +597,9 @@ class Canvas:
                     inner = Box(b.x + 3, b.y + 3, b.w - 6, b.h - 6)
                     if hits(p, q, inner):
                         out.append(f"arrow {pts[0]}→{pts[-1]} crosses {n!r}")
+                for n, b in self.g_fixed:  # zone labels, notes, title, readouts
+                    if hits(p, q, b):
+                        out.append(f"arrow {pts[0]}→{pts[-1]} crosses the text {n!r}")
         return sorted(set(out))
 
     def svg(self, slug: str, title: str, desc: str, defs: dict[str, str]) -> str:

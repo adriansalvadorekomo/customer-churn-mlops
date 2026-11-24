@@ -12,6 +12,7 @@ Stdlib only.
 from __future__ import annotations
 
 import base64
+import itertools
 import json
 import shutil
 import subprocess
@@ -103,10 +104,20 @@ def font_css() -> str:
     return "".join(out)
 
 
+def text_width(s: str, size: float, mono: bool = False) -> float:
+    """Rendered width estimate: JetBrains Mono is 0.6 em per glyph; Inter about 0.56 em on average."""
+    if mono:
+        return len(s) * size * 0.6
+    narrow = sum(ch in "iljtfr.,:;'|!() " for ch in s)
+    wide = sum(ch in "mwMW@%" for ch in s) + sum(ch.isupper() for ch in s) * 0.35
+    return size * (0.555 * len(s) - 0.24 * narrow + 0.25 * wide)
+
+
 # ── drawing primitives ──────────────────────────────────────────────────────
 class Canvas:
     def __init__(self, w: int, h: int, theme: str):
         self.w, self.h, self.t = w, h, THEMES[theme]
+        _LAST.append(self)
         self.theme = theme
         self.defs: list[str] = []
         self.back: list[str] = []  # boundaries
@@ -114,6 +125,21 @@ class Canvas:
         self.front: list[str] = []  # cards, labels
         self._id = 0
         self._markers: dict[str, str] = {}
+        # Geometry for lint(): every box (kind, name, x, y, w, h), every arrow, text overflow.
+        self.boxes: list[tuple[str, str, float, float, float, float]] = []
+        self.arrows: list[list[tuple[float, float]]] = []
+        self.issues: list[str] = []
+        self._quiet = 0  # >0 while a primitive draws its own text
+
+    def _box(self, kind, name, x, y, w, h):
+        self.boxes.append((kind, name, x, y, w, h))
+
+    def _fits(self, what, text, size, avail, mono=False):
+        width = text_width(text, size, mono)
+        if width > avail + 0.5:
+            self.issues.append(
+                f"overflow: {what} {text!r} needs {width:.0f}px, has {avail:.0f}px"
+            )
 
     def uid(self, p="c") -> str:
         self._id += 1
@@ -135,6 +161,10 @@ class Canvas:
         opacity=1.0,
     ):
         color = color or self.t["text"]
+        if not self._quiet and layer is None:
+            w = text_width(s, size, family == MONO)
+            x0 = x - w if anchor == "end" else (x - w / 2 if anchor == "middle" else x)
+            self._box("note", s[:40], x0, y - size * 0.8, w, size * 1.05)
         ls = f' letter-spacing="{spacing}"' if spacing else ""
         op = f' opacity="{opacity}"' if opacity != 1 else ""
         (layer if layer is not None else self.front).append(
@@ -244,6 +274,8 @@ class Canvas:
         line_size=14.5,
     ):
         t = self.t
+        self._quiet += 1
+        self._box("card", title, x, y, w, h)
         cid = self.uid()
         if shape == "cylinder":
             e = 11
@@ -272,18 +304,45 @@ class Canvas:
             )
             top = y
         px = x + 20
+        # vertical rhythm scales with the type sizes (system cards use larger text)
+        big = title_size > 24
+        y_title = top + (72 if big else 61)
+        y_tech = y_title + (27 if big else 23)
+        lh = 20 if line_size <= 15 else round(line_size * 1.5)
+        y_lines = y_tech + (34 if big else 27)
         self.text(px, top + 31, eyebrow, 11.5, 500, accent, MONO, spacing=1.1)
         n = len(icons)
         for i, slug in enumerate(icons):
             self.tile(slug, x + w - 16 - 32 * (n - i) - 6 * (n - 1 - i), top + 14, 32)
-        self.text(px, top + 61, title, title_size, 700)
+        self.text(px, y_title, title, title_size, 700)
         if tech:
-            self.text(px, top + 84, tech, 12.5, 400, t["muted"], MONO)
+            self.text(px, y_tech, tech, 13.5 if big else 12.5, 400, t["muted"], MONO)
         for i, ln in enumerate(lines):
-            self.text(px, top + 111 + i * 20, ln, line_size, 400, t["muted"])
+            self.text(px, y_lines + i * lh, ln, line_size, 400, t["muted"])
+        icons_w = n * 38
+        self._fits(
+            f"card {title!r} eyebrow", eyebrow, 11.5, w - 40 - icons_w, mono=True
+        )
+        self._fits(
+            f"card {title!r} title",
+            title,
+            title_size,
+            w - 40 - (icons_w if title_size > 22 else 0),
+        )
+        if tech:
+            self._fits(f"card {title!r} tech", tech, 12.5, w - 40, mono=True)
+        for ln in lines:
+            self._fits(f"card {title!r} line", ln, line_size, w - 40)
+        if lines and y_lines + (len(lines) - 1) * lh + 8 > y + h - 6:
+            self.issues.append(
+                f"overflow: card {title!r} has {len(lines)} lines, too many for height {h}"
+            )
+        self._quiet -= 1
 
     def person(self, x, y, w, h, title, lines, color=None):
         t = self.t
+        self._quiet += 1
+        self._box("person", title, x, y - 23, w, h + 23)
         c = color or t["person"]
         cx = x + w / 2
         self.front.append(
@@ -301,6 +360,10 @@ class Canvas:
         self.text(cx, y + 68, title, 19, 700, anchor="middle")
         for i, ln in enumerate(lines):
             self.text(cx, y + 93 + i * 19, ln, 14, 400, t["muted"], anchor="middle")
+        self._fits(f"person {title!r} title", title, 19, w - 30)
+        for ln in lines:
+            self._fits(f"person {title!r} line", ln, 14, w - 30)
+        self._quiet -= 1
 
     def boundary(
         self, x, y, w, h, color, eyebrow, title, icons=(), tab="left", dash=True
@@ -313,6 +376,8 @@ class Canvas:
         )
         tw = 26 + len(icons) * 30 + len(eyebrow) * 8.4 + len(title) * 8.9 + 26
         tx = x + 28 if tab == "left" else x + w - 28 - tw
+        self._box("tab", title, tx, y - 17, tw, 34)
+        self._quiet += 1
         self.back.append(
             f'<rect x="{tx}" y="{y - 17}" width="{tw:.0f}" height="34" rx="17" fill="{t["bg"]}" '
             f'stroke="{color}" stroke-opacity="0.75" stroke-width="1.4"/>'
@@ -327,10 +392,12 @@ class Canvas:
         )
         cx += len(eyebrow) * 8.4 + 12
         self.text(cx, y + 5.5, title, 15, 600, t["text"], layer=self.back)
+        self._quiet -= 1
 
     # arrows ----------------------------------------------------------------
     def arrow(self, pts, color=None, width=1.8, dashed=False, halo=False, head=True):
         t = self.t
+        self.arrows.append([(float(a), float(b)) for a, b in pts])
         c = color or t["line"]
         mk = self.marker(c) if head else None
         d = "M" + " L".join(f"{px},{py}" for px, py in pts)
@@ -368,6 +435,8 @@ class Canvas:
         h = 12 + 18 * len(rows)
         w = wmax + 24
         bx = x - w / 2 if anchor == "middle" else (x - w if anchor == "end" else x)
+        self._box("label", " / ".join(lines), bx, y - h / 2, w, h)
+        self._quiet += 1
         self.front.append(
             f'<rect x="{bx:.1f}" y="{y - h / 2:.1f}" width="{w:.1f}" height="{h}" rx="9" '
             f'fill="{t["bg"]}" fill-opacity="0.94" stroke="{t["border"]}" stroke-width="1"/>'
@@ -375,10 +444,28 @@ class Canvas:
         cx = bx + w / 2
         for i, (s, sz, wt, col, fam) in enumerate(rows):
             self.text(cx, y - h / 2 + 22 + i * 18, s, sz, wt, col, fam, "middle")
+        self._quiet -= 1
 
     # page ------------------------------------------------------------------
     def header(self, eyebrow, title, subtitle, stack):
         t = self.t
+        self._box(
+            "header",
+            title,
+            60,
+            40,
+            max(text_width(title, 40) + 10, text_width(subtitle, 17.5)),
+            115,
+        )
+        self._box(
+            "stack",
+            "stack",
+            self.w - 60 - len(stack) * 52 + 8,
+            40,
+            len(stack) * 52 - 8,
+            74,
+        )
+        self._quiet += 1
         self.text(60, 66, eyebrow, 14, 500, t["ana"], MONO, spacing=1.6)
         self.text(60, 112, title, 40, 800, spacing=-0.6)
         self.text(60, 146, subtitle, 17.5, 400, t["muted"])
@@ -387,60 +474,137 @@ class Canvas:
             self.tile(slug, x, 70, 44)
             x += 52
         self.text(self.w - 60, 52, "STACK", 11.5, 500, t["faint"], MONO, "end", 1.4)
+        self._quiet -= 1
 
     def legend(
         self,
         y,
         items_note,
         kinds=("person", "container", "store", "external", "boundary", "rel"),
+        items=None,
     ):
+        """Key at the bottom. ``items`` lists exactly what the diagram uses, e.g.
+        [("person", "person", "Person"), ("card", "ops", "Application container"),
+         ("store", "gold", "Data store"), ("card", "ext", "External system"),
+         ("boundary", "ops", "Deployment boundary"), ("rel", "line", "Uses / calls"),
+         ("rel_dashed", "line", "Optional / async")].
+        Without ``items`` the generic key from ``kinds`` is drawn."""
         t = self.t
+        self._quiet += 1
+        if items is None:
+            generic = {
+                "person": ("person", "person", "Person"),
+                "container": ("card", "ops", "Container"),
+                "component": ("card", "ops", "Component"),
+                "store": ("store", "gold", "Data store"),
+                "external": ("card", "ext", "External system"),
+                "boundary": ("boundary", "ana", "Boundary"),
+                "rel": ("rel", "line", "Uses / data flow"),
+            }
+            items = [generic[k] for k in kinds]
         x = 60
-
-        def sw(kind, label):
-            nonlocal x
+        for kind, col, label in items:
+            c = t[col]
             if kind == "person":
                 self.front.append(
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="9" fill="none" stroke="{t["person"]}" stroke-width="1.6"/>'
+                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="9" fill="none" stroke="{c}" stroke-width="1.6"/>'
                 )
-            elif kind == "container":
+            elif kind == "card":
                 self.front.append(
                     f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="4" fill="{t["card"]}" stroke="{t["border"]}"/>'
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="3" fill="{t["ops"]}"/>'
+                    f'<rect x="{x}" y="{y - 13}" width="26" height="3.5" fill="{c}"/>'
                 )
             elif kind == "store":
                 self.front.append(
-                    f'<path d="M{x},{y - 10} a13,4 0 0 1 26,0 v12 a13,4 0 0 1 -26,0 Z" fill="{t["card"]}" stroke="{t["gold"]}" stroke-width="1.4"/>'
-                )
-            elif kind == "external":
-                self.front.append(
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="4" fill="{t["card"]}" stroke="{t["border"]}"/>'
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="3" fill="{t["ext"]}"/>'
+                    f'<path d="M{x},{y - 10} a13,4 0 0 1 26,0 v12 a13,4 0 0 1 -26,0 Z" fill="{t["card"]}" stroke="{c}" stroke-width="1.4"/>'
                 )
             elif kind == "boundary":
                 self.front.append(
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="5" fill="none" stroke="{t["ana"]}" stroke-dasharray="4 3" stroke-width="1.4"/>'
+                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="5" fill="{c}" fill-opacity="0.06" stroke="{c}" stroke-dasharray="4 3" stroke-width="1.4"/>'
                 )
-            elif kind == "rel":
+            elif kind in ("rel", "rel_dashed"):
+                dash = ' stroke-dasharray="5 4"' if kind == "rel_dashed" else ""
                 self.front.append(
-                    f'<path d="M{x},{y - 4} H{x + 22}" stroke="{t["line"]}" stroke-width="1.8" marker-end="url(#{self.marker(t["line"])})"/>'
+                    f'<path d="M{x},{y - 4} H{x + 22}" stroke="{c}" stroke-width="1.8"{dash} marker-end="url(#{self.marker(c)})"/>'
                 )
             self.text(x + 36, y + 1, label, 13.5, 500, t["muted"])
-            x += 36 + len(label) * 7.4 + 34
-
+            x += 36 + text_width(label, 13.5) + 30
         self.text(60, y - 34, "LEGEND", 11.5, 500, t["faint"], MONO, spacing=1.4)
-        labels = {
-            "person": "Person",
-            "container": "Container",
-            "component": "Component",
-            "store": "Data store",
-            "external": "External system",
-            "boundary": "Boundary",
-            "rel": "Uses / data flow",
-        }
-        for k in kinds:
-            sw("container" if k == "component" else k, labels[k])
         self.text(self.w - 60, y + 1, items_note, 13, 400, t["faint"], MONO, "end")
+        self._box("legend", "legend", 60, y - 48, x - 60, 56)
+        self._box(
+            "legend-note",
+            items_note,
+            self.w - 60 - text_width(items_note, 13, True),
+            y - 12,
+            text_width(items_note, 13, True),
+            16,
+        )
+        self._quiet -= 1
+
+    # quality gate ------------------------------------------------------------
+    def lint(self) -> list[str]:
+        """Collisions a reader would notice: overlapping boxes and labels, arrows through cards,
+        text overflowing its card, anything off the canvas."""
+        out = list(self.issues)
+        solid = (
+            "card",
+            "person",
+            "label",
+            "tab",
+            "note",
+            "header",
+            "stack",
+            "legend",
+            "legend-note",
+        )
+
+        def overlap(a, b, pad=1.0):
+            return (
+                a[2] < b[2] + b[4] - pad
+                and b[2] < a[2] + a[4] - pad
+                and a[3] < b[3] + b[5] - pad
+                and b[3] < a[3] + a[5] - pad
+            )
+
+        bx = [b for b in self.boxes if b[0] in solid]
+        for i, a in enumerate(bx):
+            if a[2] < 0 or a[3] < 0 or a[2] + a[4] > self.w or a[3] + a[5] > self.h:
+                out.append(f"off-canvas: {a[0]} {a[1]!r}")
+            for b in bx[i + 1 :]:
+                if overlap(a, b):
+                    out.append(f"overlap: {a[0]} {a[1]!r} and {b[0]} {b[1]!r}")
+
+        def seg_hits(p, q, r):
+            (x1, y1), (x2, y2) = p, q
+            rx, ry, rw, rh = r
+            if x1 == x2:
+                return rx < x1 < rx + rw and max(min(y1, y2), ry) < min(
+                    max(y1, y2), ry + rh
+                )
+            if y1 == y2:
+                return ry < y1 < ry + rh and max(min(x1, x2), rx) < min(
+                    max(x1, x2), rx + rw
+                )
+            n = 40  # diagonal: sample
+            return any(
+                rx < x1 + (x2 - x1) * k / n < rx + rw
+                and ry < y1 + (y2 - y1) * k / n < ry + rh
+                for k in range(n + 1)
+            )
+
+        blockers = [
+            b
+            for b in self.boxes
+            if b[0] in ("card", "person", "tab", "header", "stack", "legend")
+        ]
+        for pts in self.arrows:
+            for p, q in itertools.pairwise(pts):
+                for b in blockers:
+                    r = (b[2] + 4, b[3] + 4, b[4] - 8, b[5] - 8)
+                    if r[2] > 0 and r[3] > 0 and seg_hits(p, q, r):
+                        out.append(f"arrow {pts[0]}→{pts[-1]} crosses {b[0]} {b[1]!r}")
+        return sorted(set(out))
 
     def svg(self, title, desc) -> str:
         t = self.t
@@ -506,12 +670,31 @@ def to_png(svg_path: Path, w: int, h: int, browser: str) -> None:
         )
 
 
+_LAST: list[Canvas] = []
+
+
+def lint_diagram(fn) -> list[str]:
+    """Draw once (light theme) and lint the canvas the function used."""
+    _LAST.clear()
+    fn("light")
+    return _LAST[-1].lint() if _LAST else []
+
+
 def build(here: Path, diagrams) -> None:
     """diagrams: iterable of (name, fn(theme) -> svg, (w, h)). Writes c4-<name>-<theme>.svg/.png."""
     svg_only = "--svg-only" in sys.argv
     browser = None if svg_only else chromium()
     if not svg_only and not browser:
         sys.exit("Chromium not found: install it or pass --svg-only")
+    problems = []
+    for name, fn, size in diagrams:
+        canvas_issues = lint_diagram(fn)
+        if canvas_issues:
+            problems += [f"{name}: {i}" for i in canvas_issues]
+    if problems:
+        print("\n".join(problems), file=sys.stderr)
+        if "--force" not in sys.argv:
+            sys.exit(f"{len(problems)} layout problem(s); fix them or pass --force")
     for name, fn, size in diagrams:
         for theme in THEMES:
             out = here / f"c4-{name}-{theme}.svg"

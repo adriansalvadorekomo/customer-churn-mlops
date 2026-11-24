@@ -1,247 +1,150 @@
-# Customer Churn MLOps
+<h1 align="center">Customer Churn MLOps</h1>
 
-![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)
-![Prefect 3](https://img.shields.io/badge/orchestration-prefect_3-orange)
-![Accuracy 85.5%](https://img.shields.io/badge/accuracy-85.5%25-emerald)
-![Ruff](https://img.shields.io/badge/style-ruff-purple)
-![Pytest](https://img.shields.io/badge/tests-pytest-yellow)
-![Docker Hub](https://img.shields.io/badge/dockerhub-twelvy1400-2496ed)
+<p align="center">
+  A bank-churn notebook turned into a <b>tested, scheduled pipeline</b>: four code gates run before anything trains,<br>
+  three Prefect flows retrain and re-score on a daily schedule, every run lands in MLflow, and a FastAPI service and a small desk serve the model.
+</p>
 
-Bank customer churn prediction, from an exploratory Jupyter notebook to a
-**modular, tested, and daily-scheduled MLOps pipeline** orchestrated with Prefect.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white" alt="Python 3.12" />
+  <img src="https://img.shields.io/badge/Prefect-3-070E10?style=flat&logo=prefect&logoColor=white" alt="Prefect 3" />
+  <img src="https://img.shields.io/badge/MLflow-3.17-0194E2?style=flat&logo=mlflow&logoColor=white" alt="MLflow" />
+  <img src="https://img.shields.io/badge/scikit--learn-RandomForest-F7931E?style=flat&logo=scikitlearn&logoColor=white" alt="scikit-learn" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Astro-BC52EE?style=flat&logo=astro&logoColor=white" alt="Astro" />
+  <img src="https://img.shields.io/badge/Docker_Compose-5_services-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker Compose" />
+</p>
 
-> A RandomForest classifier predicts whether a bank customer will leave
-> (`Exited`), reaching **85.5% accuracy** on a 2,000-customer holdout set.
-
-[![Interactive pipeline diagram — click to explore](docs/assets/pipeline-preview.png)](docs/architecture.html)
-
-*Above: the full pipeline at a glance. For the interactive version (search,
-tracing, guided views), open [`docs/architecture.html`](docs/architecture.html)
-locally in your browser — GitHub previews the image, the HTML runs locally.*
+<p align="center">
+  <img src="docs/screenshots/desk-verdict.png" width="100%" alt="The Churn Desk: an intake sheet filled with a dataset customer (credit score 850, age 43, balance 125,510.82) and, on the right, the verdict STAYS returned by POST /predict with exited = 0, plus the model card: RandomForest with 100 trees, 85.55% holdout accuracy, churner recall 0.42.">
+</p>
 
 ---
 
-## 1. Quickstart
+## What it is for
 
-### With `uv` (recommended)
+The starting point was a one-off Jupyter notebook: no tests, no schedule, retrained by hand. This repository keeps the model and makes everything around it repeatable:
+
+- **Nothing trains on unchecked code.** `ruff format`, `ruff check`, `bandit` and `pytest` run as blocking Prefect tasks right after the dependencies install.
+- **Retraining runs itself.** Three deployments (`all`, `train`, `evaluat`) run once a day at 02:00, 04:00 and 06:00 UTC, so heavy jobs never overlap.
+- **Every training run is traceable.** Parameters, accuracy and the fitted model go to MLflow; a tracking outage is logged as a warning and never fails the pipeline.
+- **The model is usable without code.** `POST /predict` serves it; the Churn Desk calls it one customer at a time and shows the model report next to the verdict.
+
+## How it works
+
+<p align="center">
+  <a href="docs/diagrams/c4/c4-container-light.svg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/c4/c4-container-dark.png">
+      <img src="docs/diagrams/c4/c4-container-light.png" width="100%" alt="C4 Level 2 container diagram. In Docker Compose, the Churn Desk (Astro served by nginx, port 4321) calls the FastAPI prediction API (port 8000), which loads classifier.joblib from the ./models volume. The worker, built from the same image, serves the three Prefect deployments against the Prefect server (port 4200), reads Churn_Modelling.csv, writes the model to ./models and logs every run to MLflow (port 5000).">
+    </picture>
+  </a>
+  <br><sub>C4 Level 2. Click for the SVG · <a href="docs/diagrams/c4/c4-context-light.png">Level 1: system context</a> · <a href="docs/diagrams/c4/c4-component-light.png">Level 3: pipeline components</a></sub>
+</p>
+
+- **One image, two roles.** `Dockerfile.backend` builds once; the `backend` service runs uvicorn, the `worker` service runs `deploiement_prefect.py --container`. Inside the image the flows skip `fetch-source-code` and `install-dependencies`, because the image already ships both.
+- **Pure logic, then orchestration.** `src/model_pipeline.py` has seven plain functions and no Prefect import; `src/tasks.py` wraps each as a task (retries on prepare and train); `src/flows.py` chains them. The same code runs from `main.py`, a Prefect deployment or a test.
+- **The model crosses containers as a file.** The worker writes `models/classifier.joblib` to a host volume; the API loads it at start, so `docker compose restart backend` serves a retrained model.
+
+### Inside a run
+
+<p align="center">
+  <img src="docs/screenshots/prefect-flow-run.png" width="100%" alt="A completed Prefect run of the all flow, 9 task runs in 5 seconds: format-code, lint-code, scan-security and run-unit-tests in parallel, then prepare-data, train-model, evaluate-model, save-model and load-model.">
+  <br><sub>A real run of <code>all</code>: the four gates in parallel, then prepare → train → evaluate / save → load (9 tasks, 5 s).</sub>
+</p>
+
+| Flow | Jobs | Schedule (UTC) |
+|---|---|---|
+| `all` | fetch → install → gates → prepare → train → evaluate → save → load | 02:00 |
+| `train` | prepare → train → save | 04:00 |
+| `evaluat` | load → evaluate | 06:00 |
+
+## Results
+
+Measured on the 2,000-customer holdout (80/20 split, seed 1; RandomForest, 100 trees, `random_state` 42). A fresh run reproduces these numbers exactly.
+
+| | |
+|---|---|
+| Accuracy | **85.55%** |
+| Baseline: always predict "stays" | 79.25% (1,585 of 2,000) |
+| Churners caught (recall, class 1) | **0.42** (176 of 415), precision 0.78 |
+| Tests | 10 (6 pipeline, 4 API), run as a gate inside every full flow |
+
+<p align="center">
+  <img src="docs/screenshots/model-report.png" width="100%" alt="The model report page: 85.55% test accuracy on the 2,000-case holdout, the classification report (stays: precision 0.87, recall 0.97; leaves: precision 0.78, recall 0.42), the confusion matrix 1,535 / 50 / 239 / 176, and a caution panel explaining that the model misses most churners.">
+</p>
+
+**Read the accuracy with the recall.** About one customer in five leaves (20.4% of the dataset), so a model that always says "stays" already scores about 80%. This one beats it by about 6 points but still misses 239 of 415 churners: it runs with default settings (no class weights, the default 0.5 threshold) and drops `Geography`, as the notebook did. The weak number is stated, not hidden; the fix is listed below.
+
+## Engineering decisions
+
+| Decision | Why | Cost |
+|---|---|---|
+| Gates are Prefect tasks inside the flow, not only a CI step | A scheduled run on a server is checked the same way as a push | The full flow takes longer than training alone |
+| Logic in `model_pipeline.py`, orchestration in `tasks.py` / `flows.py` | Tests and the CLI run the logic without a Prefect server | Two layers to keep in sync |
+| MLflow outage = warning | Tracking must not take the pipeline down | A run can finish without a trace; the log says so |
+| `prefect.serve` in-process, no work pool | One container schedules and executes; nothing else to operate | No horizontal scaling of runs |
+| Notebook kept faithful where it matters | Accuracy stays comparable with the original (~85.5%) | `Geography` stays dropped for now |
+
+Two notebook bugs were **not** reproduced: a `StandardScaler` fitted separately on train and test (leakage, and never used), and `df.isnull` without parentheses. The full mapping from notebook cells to functions is in [docs/howToDoModular.md](docs/howToDoModular.md) (French).
+
+## Quick start
+
+Needs Python 3.12 and [uv](https://docs.astral.sh/uv/); Docker for the full stack.
 
 ```bash
+git clone https://github.com/adriansalvadorekomo/customer-churn-mlops.git
+cd customer-churn-mlops
 uv sync
+
 uv run python main.py                 # full run: install → gates → train → evaluate → save
+uv run python main.py --flow all      # the same, through Prefect (no server needed)
+uv run pytest -q                      # 10 tests
+uv run uvicorn src.app:app --reload   # the API, Swagger at /docs
 ```
 
-### With `pip` (classic venv)
+**The whole stack:**
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt       # same pins as pyproject.toml
-python main.py --skip-install
+docker compose up --build             # or: docker compose pull backend frontend && docker compose up -d
 ```
 
-### Useful variants
+| Service | URL | Role |
+|---|---|---|
+| `frontend` | http://localhost:4321 | Churn Desk: intake sheet, ledger, model report |
+| `backend` | http://localhost:8000 | `POST /predict`, `GET /health`, `/docs` |
+| `prefect-server` | http://localhost:4200 | Deployments, schedules, run history |
+| `worker` | (none) | Serves the three deployments and executes runs |
+| `mlflow` | http://localhost:5000 | One run per training |
 
-```bash
-uv run python main.py --flow train    # prepare + train, via Prefect (no server needed)
-uv run python main.py --flow evaluat  # load saved model + evaluate, via Prefect
-uv run python main.py --flow all      # everything, via Prefect
-uv run python main.py --no-train      # reuse models/classifier.joblib, skip training
-uv run uvicorn src.app:app --reload   # the predict API (Swagger at /docs)
-uv run pytest -q                      # 10 unit tests
-```
+Then trigger `all/daily-all` in Prefect, watch it appear in MLflow, and `docker compose restart backend` to serve the new model. Check the schedules without a server: `python deploiement_prefect.py --dry-run`.
+
+Without Docker, the desk runs with `cd frontend && npm install && npm run dev` (it calls the API on :8000; bake another URL with `PUBLIC_API_URL=… npm run build`). Prebuilt images are published as `twelvy1400/churn-mlops-backend` and `twelvy1400/churn-mlops-frontend` (`:latest` and `:<short-sha>`).
+
+## Repository map
+
+| Path | What lives there |
+|---|---|
+| [`src/model_pipeline.py`](src/model_pipeline.py) | Seven pure functions: install, prepare, train, evaluate, save, load, predict |
+| [`src/tasks.py`](src/tasks.py) | One Prefect task per job, plus the four code gates |
+| [`src/flows.py`](src/flows.py) | The `all`, `train` and `evaluat` flows |
+| [`src/tracking.py`](src/tracking.py) | MLflow logging (params, accuracy, model) |
+| [`src/app.py`](src/app.py) | FastAPI: `GET /health`, `POST /predict` |
+| [`deploiement_prefect.py`](deploiement_prefect.py) | The three cron deployments (`--container`, `--dry-run`) |
+| [`frontend/`](frontend/) | Churn Desk: Astro + Tailwind, built and served by nginx |
+| [`tests/`](tests/) | 6 pipeline tests, 4 API tests |
+| [`notebooks/`](notebooks/) | The original notebook and `Churn_Modelling.csv` |
+| [`docs/diagrams/c4/`](docs/diagrams/c4/) | C4 diagrams and their generator (`python docs/diagrams/c4/build_c4.py`) |
+
+## Limitations and next steps
+
+- **Class imbalance is not handled yet.** Next: one-hot encode `Geography`, try `class_weight="balanced"`, compare the runs in MLflow.
+- **The gates run inside the flow, not on every push.** Next: the same ruff, bandit and pytest checks in GitHub Actions.
+- **One process schedules and executes.** Enough for one daily model; a work pool would be needed to run flows in parallel.
+- **The API serves the model it loaded at start.** A retrained model needs `docker compose restart backend`.
 
 ---
 
-## 2. The whole stack, one command (Docker)
-
-Five services: the predict API, the Astro dashboard ("Churn Desk"), Prefect,
-the daily worker, and MLflow.
-
-| Service | URL | What runs |
-|---------|-----|-----------|
-| `frontend` | http://localhost:4321 | Astro dashboard served by nginx — predict / ledger / report |
-| `backend` | http://localhost:8000 | FastAPI — `POST /predict`, `GET /health` (Swagger at `/docs`) |
-| `prefect-server` | http://localhost:4200 | Prefect API + UI (SQLite in a named volume) |
-| `worker` | — | serves the 3 daily deployments and executes runs in-process |
-| `mlflow` | http://localhost:5000 | tracking server — every training run logs params, accuracy, model |
-
-```bash
-docker compose up --build     # first build a few minutes, then seconds
-# → http://localhost:4321     fill the intake sheet, press Decide
-# → http://localhost:4200     Deployments → Run "all/daily-all"
-# → http://localhost:5000     the run appears here when the flow finishes
-```
-
-In the containers the flows skip `fetch-source-code` and
-`install-dependencies` — the image already ships code and dependencies
-(`deploiement_prefect.py --container` sets those run parameters). The code
-gates, training and MLflow logging all still run inside the worker.
-
-The worker retrains into `./models` on the host; restart the backend to pick
-up a fresh artifact:
-
-```bash
-docker compose restart backend
-```
-
-### Prebuilt images (Docker Hub)
-
-Both builds are published under `twelvy1400/`, and `docker-compose.yml`
-already points at those names — pulling replaces the local build:
-
-```bash
-docker compose pull backend frontend   # :latest + :<short-sha> live on the Hub
-docker compose up -d                   # pin a SHA tag for reproducibility
-```
-
-### Frontend without Docker
-
-```bash
-cd frontend
-npm install
-npm run dev                                        # http://localhost:4321 (API on :8000)
-PUBLIC_API_URL=http://my-api:8000 npm run build    # bake a different API URL
-```
-
----
-
-## 3. How it works — 6 jobs, 3 flows
-
-Pure logic lives in `src/model_pipeline.py` (importable without Prefect);
-`src/tasks.py` wraps each job as a Prefect `@task`, and `src/flows.py`
-chains them into flows.
-
-| # | Job (task) | What it does |
-|---|------------|--------------|
-| 0 | `fetch-source-code` | `git clone` if missing, `git pull --ff-only` if an `origin` remote exists, graceful skip otherwise |
-| 1 | `install-dependencies` | `pip install -r requirements.txt` (auto-fallback to `uv pip` inside uv venvs) |
-| 2 | `prepare-data` | Label-encodes `Gender`, drops ID/text cols, 80/20 split (seed 1) |
-| 3 | `train-model` | `RandomForestClassifier(n_estimators=100, random_state=42)` |
-| 4 | `evaluate-model` | Accuracy + classification report + confusion matrix (returned as dict) |
-| 5 | `save-model` | `joblib.dump` → `models/classifier.joblib` |
-| 6 | `load-model` | `joblib.load` + demo prediction on a sample customer |
-
-Code gates run right after the install step, before any training:
-
-| Gate (task) | Tool | Fails the pipeline when… |
-|-------------|------|--------------------------|
-| `format-code` | `ruff format` | style drift (auto-fixed, then re-checked) |
-| `lint-code` | `ruff check` | any lint violation |
-| `scan-security` | `bandit -r src -ll` | medium+ severity issue |
-| `run-unit-tests` | `pytest` | any test in `tests/` fails |
-
-### The 3 flows
-
-| Flow | Jobs | Use it to… |
-|------|------|------------|
-| `all` | fetch → install → gates → prepare → train → evaluate → save → load | nightly full run (scheduled 02:00 UTC) |
-| `train` | prepare → train → save | retrain on fresh data (scheduled 04:00 UTC) |
-| `evaluat` | load → evaluate | score the saved model (scheduled 06:00 UTC) |
-
-Every `train` / `all` run also logs to MLflow (`src/tracking.py`): the
-parameters (`n_estimators`, `test_size`), the holdout accuracy, and the
-fitted model.
-
----
-
-## 4. Daily automation (Prefect)
-
-`deploiement_prefect.py` builds one cron deployment per flow — **one run per
-day, staggered so heavy jobs never overlap**:
-
-| Deployment | Cron (UTC) | Flow |
-|------------|-----------|------|
-| `all/daily-all` | `0 2 * * *` | full pipeline |
-| `train/daily-train` | `0 4 * * *` | prepare + train |
-| `evaluat/daily-evaluat` | `0 6 * * *` | load + evaluate |
-
-Test with 3 terminals:
-
-```bash
-# T1 — API + UI
-prefect server start                      # http://127.0.0.1:4200
-# T2 — build + serve the deployments (scheduler + runner, no worker needed)
-python deploiement_prefect.py
-# T3 — trigger immediately (or click Run in the UI)
-prefect deployment run "all/daily-all"
-```
-
-No server handy? Validate the schedule offline:
-
-```bash
-python deploiement_prefect.py --dry-run   # builds deployments, prints plan, exits
-python deploiement_prefect.py --flows train --dry-run
-```
-
----
-
-## 5. Project structure
-
-```text
-customer-churn-mlops/
-├── src/
-│   ├── model_pipeline.py   # 6 pure functions (no Prefect import)
-│   ├── tasks.py            # 1 Prefect @task per job + 4 code-gate tasks
-│   ├── flows.py            # all / train / evaluat
-│   ├── tracking.py         # MLflow: params + accuracy + model per training run
-│   └── app.py              # FastAPI service: GET /health, POST /predict
-├── tests/
-│   ├── test_pipeline.py    # 6 pipeline tests
-│   └── test_app.py         # 4 API tests
-├── frontend/               # Astro + Tailwind dashboard ("Churn Desk")
-│   ├── src/pages/          # / (intake) · /ledger (history) · /report (metrics)
-│   └── Dockerfile          # node build stage → nginx
-├── notebooks/
-│   ├── customer_churn.ipynb
-│   └── data/Churn_Modelling.csv
-├── models/
-│   └── classifier.joblib   # trained artifact (85.5% accuracy)
-├── docs/
-│   ├── architecture.html   # interactive pipeline diagram (open locally)
-│   ├── assets/pipeline-preview.png
-│   └── howToDoModular.md   # Feynman-style guide: notebook → modules
-├── main.py                 # CLI: direct run or --flow {all,train,evaluat}
-├── deploiement_prefect.py  # daily cron deployments (--container for Docker)
-├── Dockerfile.backend      # one image: API (default) + worker (command override)
-├── docker-compose.yml      # the 5-service stack
-├── DESIGN.md               # design truth: world, tokens, rules, motion
-├── PRODUCT.md              # product truth: users, purpose, positioning
-├── requirements.txt        # pip (mirrors pyproject.toml for uv users)
-└── pyproject.toml
-```
-
----
-
-## 6. Results
-
-```
-Accuracy score: 85.55
-              precision    recall  f1-score   support
-           0       0.87      0.97      0.91      1585
-           1       0.78      0.42      0.55       415
-Confusion matrix:
-[[1535   50]
- [ 239  176]]
-```
-
-> Class imbalance (79.6% stayed / 20.4% left) caps recall on churners at 0.42.
-> Documented next step: OneHot-encode `Geography` (currently dropped, as in the
-> notebook) and try class weights.
-
----
-
-## 7. Docs
-
-- [`docs/architecture.html`](docs/architecture.html) — interactive pipeline
-  diagram: guided views, tracing, light/dark, PNG/SVG export.
-- [`docs/howToDoModular.md`](docs/howToDoModular.md) — step-by-step beginner
-  guide (in French): how this notebook became 6 reusable functions.
-- [`DESIGN.md`](DESIGN.md) — the "Churn Desk" design truth: world, tokens,
-  named rules, motion, accessibility.
-- [`PRODUCT.md`](PRODUCT.md) — product truth: users, purpose, positioning.
-
-## 8. Roadmap
-
-- [x] Experiment tracking (MLflow) — `src/tracking.py` + the `mlflow` service in `docker-compose.yml`
-- [x] Docker: one backend/worker image + the 5-service `docker-compose.yml`
-- [ ] OneHot-encode `Geography` + `class_weight="balanced"`, compare runs
-- [ ] GitHub Actions CI: ruff + bandit + pytest on every push
+<p align="center">
+  <sub><a href="https://github.com/adriansalvadorekomo"><b>Adrián Salvador Ekomo</b></a> · <a href="https://adriansalvadorekomodev.vercel.app">portfolio</a> · <a href="https://adriansalvadorekomodev.vercel.app/blog/accuracy-recall-put-the-weak-number-in-the-readme">Write-up: 85.5% accuracy, 0.42 recall: put the weak number in the README</a></sub>
+</p>

@@ -10,6 +10,7 @@ Job order (see ``flows.py``):
 """
 
 import importlib.util
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -65,6 +66,16 @@ def _module_cmd(module: str, *args: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # Job 0 — fetch the project (Étape 06: first pipeline step)
 # ---------------------------------------------------------------------------
+def git_executable() -> str:
+    """Absolute path of ``git`` (Bandit B607: never start a process by bare name)."""
+    git = shutil.which("git")
+    if git is None:
+        raise RuntimeError(
+            "git is not installed or not on PATH: cannot fetch the source code."
+        )
+    return git
+
+
 @task(name="fetch-source-code")
 def fetch_source_code_task(
     repo_url: str = REPO_URL_DEFAULT,
@@ -81,11 +92,12 @@ def fetch_source_code_task(
     """
     dest = Path(dest)
     is_repo = (dest / ".git").is_dir()
+    git = git_executable()
 
     if is_repo:
         has_origin = (
             subprocess.run(
-                ["git", "-C", str(dest), "remote", "get-url", "origin"],
+                [git, "-C", str(dest), "remote", "get-url", "origin"],
                 capture_output=True,
                 check=False,  # probe: returncode inspected, must not raise
             ).returncode
@@ -95,7 +107,7 @@ def fetch_source_code_task(
             msg = f"No 'origin' remote in {dest}: using local checkout as-is."
             print(msg)
             return msg
-        _run_logged(["git", "-C", str(dest), "pull", "--ff-only"], "fetch-source-code")
+        _run_logged([git, "-C", str(dest), "pull", "--ff-only"], "fetch-source-code")
         msg = f"Pulled latest '{branch}' into {dest}."
         print(msg)
         return msg
@@ -104,7 +116,7 @@ def fetch_source_code_task(
         raise RuntimeError(f"Cannot clone into non-empty, non-git directory: {dest}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     _run_logged(
-        ["git", "clone", "--branch", branch, repo_url, str(dest)],
+        [git, "clone", "--branch", branch, repo_url, str(dest)],
         "fetch-source-code",
     )
     msg = f"Cloned {repo_url} (branch {branch}) into {dest}."
@@ -147,15 +159,17 @@ def lint_task(
 
 
 @task(name="scan-security")
-def security_task(target: str = "src") -> str:
-    """3. Code security — ``bandit`` (medium severity and above).
+def security_task(target: str = ".") -> str:
+    """3. Code security — ``bandit`` with ``[tool.bandit]`` from pyproject.toml.
 
-    ``-ll`` keeps the gate green for intentional, safe patterns used here
-    (e.g. ``subprocess`` with an arg list and no ``shell=True``), while
-    still catching real issues.
+    Every severity fails the gate. The config excludes tests, the frontend,
+    notebooks and docs, and skips only two reviewed rules (B404, B603:
+    ``subprocess`` with fixed argument lists, never ``shell=True``). CI runs
+    the same command (.github/workflows/ci.yml).
     """
+    config = _PROJECT_ROOT / "pyproject.toml"
     return _run_logged(
-        _module_cmd("bandit", "-r", target, "-ll", "-q"), "scan-security"
+        _module_cmd("bandit", "-c", str(config), "-r", target, "-q"), "scan-security"
     )
 
 

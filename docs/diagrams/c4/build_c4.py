@@ -457,8 +457,8 @@ def component(theme: str) -> str:
     gates = [
         ("format-code", "ruff format", "src tests main.py …"),
         ("lint-code", "ruff check", "any violation fails"),
-        ("scan-security", "bandit -r src -ll", "medium severity and up"),
-        ("run-unit-tests", "pytest", "10 tests"),
+        ("scan-security", "bandit -c pyproject.toml", "every severity fails"),
+        ("run-unit-tests", "pytest", "15 tests"),
     ]
     for i, (name, tool, note) in enumerate(gates):
         x = gx + i * (gw + gap)

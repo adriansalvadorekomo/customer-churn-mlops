@@ -22,6 +22,8 @@ COPY src ./src
 COPY tests ./tests
 COPY models ./models
 COPY main.py deploiement_prefect.py ./
+# Ruff, Bandit and pytest settings for the gates that run inside the worker.
+COPY pyproject.toml ./
 
 EXPOSE 8000
 

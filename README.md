@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/adriansalvadorekomo/customer-churn-mlops/actions/workflows/ci.yml"><img src="https://github.com/adriansalvadorekomo/customer-churn-mlops/actions/workflows/ci.yml/badge.svg" alt="gates: ruff, bandit, pytest" /></a>
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white" alt="Python 3.12" />
   <img src="https://img.shields.io/badge/Prefect-3-070E10?style=flat&logo=prefect&logoColor=white" alt="Prefect 3" />
   <img src="https://img.shields.io/badge/MLflow-3.17-0194E2?style=flat&logo=mlflow&logoColor=white" alt="MLflow" />
@@ -27,7 +28,8 @@
 
 The starting point was a one-off Jupyter notebook: no tests, no schedule, retrained by hand. This repository keeps the model and makes everything around it repeatable:
 
-- **Nothing trains on unchecked code.** `ruff format`, `ruff check`, `bandit` and `pytest` run as blocking Prefect tasks right after the dependencies install.
+- **Nothing trains on unchecked code.** `ruff format`, `ruff check`, `bandit` and `pytest` run as blocking Prefect tasks right after the dependencies install, and the same four checks run in GitHub Actions on every push and pull request.
+- **Security scanning is strict.** Bandit fails on any severity; the only two rules skipped (`subprocess` with fixed argument lists, never `shell=True`) are listed and justified in `pyproject.toml`, and processes are started by absolute path.
 - **Retraining runs itself.** Three deployments (`all`, `train`, `evaluat`) run once a day at 02:00, 04:00 and 06:00 UTC, so heavy jobs never overlap.
 - **Every training run is traceable.** Parameters, accuracy and the fitted model go to MLflow; a tracking outage is logged as a warning and never fails the pipeline.
 - **The model is usable without code.** `POST /predict` serves it; the Churn Desk calls it one customer at a time and shows the model report next to the verdict.
@@ -71,7 +73,8 @@ Measured on the 2,000-customer holdout (80/20 split, seed 1; RandomForest, 100 t
 | Accuracy | **85.55%** |
 | Baseline: always predict "stays" | 79.25% (1,585 of 2,000) |
 | Churners caught (recall, class 1) | **0.42** (176 of 415), precision 0.78 |
-| Tests | 13 (6 pipeline, 4 API, 3 monitoring events), run as a gate inside every full flow |
+| Tests | 15 (6 pipeline, 4 API, 3 monitoring events, 2 fetch task), run as a gate inside every full flow and in CI |
+| Bandit | 0 findings at any severity over the app code (10 files, about 1,450 lines) |
 
 <p align="center">
   <img src="docs/screenshots/model-report.png" width="100%" alt="The model report page: 85.55% test accuracy on the 2,000-case holdout, the classification report (stays: precision 0.87, recall 0.97; leaves: precision 0.78, recall 0.42), the confusion matrix 1,535 / 50 / 239 / 176, and a caution panel explaining that the model misses most churners.">
@@ -105,7 +108,8 @@ The dashboard answers three questions: is the API used and fast (requests, p95 l
 
 | Decision | Why | Cost |
 |---|---|---|
-| Gates are Prefect tasks inside the flow, not only a CI step | A scheduled run on a server is checked the same way as a push | The full flow takes longer than training alone |
+| Gates are Prefect tasks inside the flow, and the same commands in CI | A scheduled run on a server is checked the same way as a push | The full flow takes longer than training alone |
+| Bandit at every severity, two reviewed skips in `pyproject.toml` | `-ll` hid a real finding (git started by bare name, B607); one config serves the gate and CI | A new low-severity pattern fails the build until fixed or reviewed |
 | Logic in `model_pipeline.py`, orchestration in `tasks.py` / `flows.py` | Tests and the CLI run the logic without a Prefect server | Two layers to keep in sync |
 | MLflow outage = warning | Tracking must not take the pipeline down | A run can finish without a trace; the log says so |
 | Monitoring through stdout, not an Elastic client in the app | No dependency or failure mode added to the API; Docker already keeps stdout | Events reach Kibana only in the `monitoring` profile |
@@ -125,7 +129,8 @@ uv sync
 
 uv run python main.py                 # full run: install → gates → train → evaluate → save
 uv run python main.py --flow all      # the same, through Prefect (no server needed)
-uv run pytest -q                      # 13 tests
+uv run pytest -q                      # 15 tests
+uv run bandit -c pyproject.toml -r .  # security gate, same command as CI
 uv run uvicorn src.app:app --reload   # the API, Swagger at /docs
 ```
 
@@ -163,14 +168,14 @@ Without Docker, the desk runs with `cd frontend && npm install && npm run dev` (
 | [`monitoring/`](monitoring/) | Filebeat, Logstash pipeline, Kibana setup (index template, data view, dashboard) |
 | [`deploiement_prefect.py`](deploiement_prefect.py) | The three cron deployments (`--container`, `--dry-run`) |
 | [`frontend/`](frontend/) | Churn Desk: Astro + Tailwind, built and served by nginx |
-| [`tests/`](tests/) | 6 pipeline tests, 4 API tests, 3 monitoring-event tests |
+| [`tests/`](tests/) | 6 pipeline, 4 API, 3 monitoring-event and 2 fetch-task tests |
+| [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | The four gates on every push and pull request; Bandit report as an artifact |
 | [`notebooks/`](notebooks/) | The original notebook and `Churn_Modelling.csv` |
 | [`docs/diagrams/c4/`](docs/diagrams/c4/) | C4 diagrams and their generator (`python docs/diagrams/c4/build_c4.py`) |
 
 ## Limitations and next steps
 
 - **Class imbalance is not handled yet.** Next: one-hot encode `Geography`, try `class_weight="balanced"`, compare the runs in MLflow.
-- **The gates run inside the flow, not on every push.** Next: the same ruff, bandit and pytest checks in GitHub Actions.
 - **One process schedules and executes.** Enough for one daily model; a work pool would be needed to run flows in parallel.
 - **The API serves the model it loaded at start.** A retrained model needs `docker compose restart backend`.
 - **Monitoring is for one machine.** Elastic security is off and nothing alerts yet; next: a Kibana rule on the churner recall of the last run.

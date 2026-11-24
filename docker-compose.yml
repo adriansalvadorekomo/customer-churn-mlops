@@ -6,7 +6,7 @@
 #   worker     serves the daily deployments    (executes the flows)
 #   mlflow     experiment tracking + UI        → http://localhost:5000
 #
-# Run:  docker compose up --build
+# Run:  docker compose up --build            (add --profile monitoring for ELK)
 # Then open http://localhost:4321 (the desk), trigger a run in Prefect,
 # watch it land in MLflow. Retrained models are written to ./models on the
 # host; `docker compose restart backend` picks them up.
@@ -19,6 +19,8 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     image: twelvy1400/churn-mlops-backend:latest
+    labels:
+      churn_logs: "true"   # collected by Filebeat in the monitoring profile
     ports:
       - "8000:8000"
     environment:
@@ -75,6 +77,8 @@ services:
       dockerfile: Dockerfile.backend
     image: twelvy1400/churn-mlops-backend:latest
     command: python deploiement_prefect.py --container
+    labels:
+      churn_logs: "true"   # collected by Filebeat in the monitoring profile
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -101,6 +105,83 @@ services:
       - mlflow-data:/mlflow
     restart: unless-stopped
 
+  # ── Monitoring (ELK) · opt-in: docker compose --profile monitoring up ──────
+  # Filebeat reads the backend and worker container logs, Logstash keeps the
+  # structured events (src/observability.py), Elasticsearch stores them and
+  # Kibana charts them: http://localhost:5601 → dashboard "Churn MLOps · monitoring".
+  # Local only: security is off and every port is bound to 127.0.0.1.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.5
+    profiles: [monitoring]
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:9.5.5
+    profiles: [monitoring]
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      XPACK_MONITORING_ENABLED: "false"
+    volumes:
+      - ./monitoring/logstash/pipeline:/usr/share/logstash/pipeline:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:9.5.5
+    profiles: [monitoring]
+    # Root to read /var/lib/docker/containers; --strict.perms=false for the bind-mounted config.
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ./monitoring/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - logstash
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.5.5
+    profiles: [monitoring]
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "127.0.0.1:5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot: index template, data view and the dashboard (monitoring/kibana/setup.py).
+  monitoring-setup:
+    image: twelvy1400/churn-mlops-backend:latest
+    profiles: [monitoring]
+    command: ["python", "monitoring/kibana/setup.py"]
+    volumes:
+      - ./monitoring:/opt/app/monitoring:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kibana:
+        condition: service_started
+    restart: "no"
+
 volumes:
   prefect-data:
   mlflow-data:
+  es-data:

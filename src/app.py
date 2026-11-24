@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from src.model_pipeline import FEATURE_COLS, load_model, predict_model
+from src.observability import Timer, emit, get_logger
 
 app = FastAPI(title="Customer Churn MLOps")
 
@@ -34,6 +35,23 @@ app.add_middleware(
 )
 
 model = load_model()
+events = get_logger("api")
+
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    """One ``http_request`` event per call (shipped to Elasticsearch in the monitoring profile)."""
+    with Timer() as t:
+        response = await call_next(request)
+    emit(
+        events,
+        "http_request",
+        method=request.method,
+        path=request.url.path,
+        status=response.status_code,
+        duration_ms=round(t.seconds * 1000, 2),
+    )
+    return response
 
 
 class Customer(BaseModel):
@@ -56,4 +74,6 @@ def health() -> dict:
 @app.post("/predict")
 def predict(customer: Customer) -> dict:
     features = [getattr(customer, col) for col in FEATURE_COLS]
-    return {"exited": predict_model(features, model=model)}
+    exited = predict_model(features, model=model)
+    emit(events, "prediction", exited=int(exited))
+    return {"exited": exited}

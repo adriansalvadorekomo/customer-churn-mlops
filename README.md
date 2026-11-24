@@ -37,15 +37,11 @@ The starting point was a one-off Jupyter notebook: no tests, no schedule, retrai
 
 ## How it works
 
-<p align="center">
-  <a href="docs/diagrams/c4/c4-container-light.svg">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/c4/c4-container-dark.png">
-      <img src="docs/diagrams/c4/c4-container-light.png" width="100%" alt="C4 Level 2 container diagram. In Docker Compose, the Churn Desk (Astro served by nginx, port 4321) calls the FastAPI prediction API (port 8000), which loads classifier.joblib from the ./models volume. The worker, built from the same image, serves the three Prefect deployments against the Prefect server (port 4200), reads Churn_Modelling.csv, writes the model to ./models and logs every run to MLflow (port 5000). In the opt-in monitoring profile, Filebeat ships the JSON events of the backend and worker to Logstash, which indexes them in Elasticsearch for the Kibana dashboard (port 5601).">
-    </picture>
-  </a>
-  <br><sub>C4 Level 2. Click for the SVG · <a href="docs/diagrams/c4/c4-context-light.png">Level 1: system context</a> · <a href="docs/diagrams/c4/c4-component-light.png">Level 3: pipeline components</a></sub>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/c4/c4-container-dark.svg">
+  <img src="docs/diagrams/c4/c4-container-light.svg" width="100%" alt="C4 container diagram. nginx serves the static Churn Desk, which runs in the analyst's browser and calls the FastAPI prediction API directly (CORS); the API loads classifier.joblib from the ./models volume at start. The worker, built from the same image, polls the Prefect server for scheduled runs, reads the dataset read-only, writes the model to ./models and logs every run to MLflow. In the opt-in monitoring profile, Filebeat tails the Docker logs of the API and the worker, Logstash indexes their JSON events in Elasticsearch, a one-shot setup container creates the index template and dashboard, and Kibana shows them to the ML engineer.">
+</picture>
+<p align="center"><sub>C4 level 2 · <a href="docs/diagrams/c4/c4-context-light.svg">level 1: context</a> · <a href="docs/diagrams/c4/c4-component-light.svg">level 3: inside the worker</a></sub></p>
 
 - **One image, two roles.** `Dockerfile.backend` builds once; the `backend` service runs uvicorn, the `worker` service runs `deploiement_prefect.py --container`. Inside the image the flows skip `fetch-source-code` and `install-dependencies`, because the image already ships both.
 - **Pure logic, then orchestration.** `src/model_pipeline.py` has seven plain functions and no Prefect import; `src/tasks.py` wraps each as a task (retries on prepare and train); `src/flows.py` chains them. The same code runs from `main.py`, a Prefect deployment or a test.
@@ -171,7 +167,7 @@ Without Docker, the desk runs with `cd frontend && npm install && npm run dev` (
 | [`tests/`](tests/) | 6 pipeline, 4 API, 3 monitoring-event and 2 fetch-task tests |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | The four gates on every push and pull request; Bandit report as an artifact |
 | [`notebooks/`](notebooks/) | The original notebook and `Churn_Modelling.csv` |
-| [`docs/diagrams/c4/`](docs/diagrams/c4/) | C4 diagrams and their generator (`python docs/diagrams/c4/build_c4.py`) |
+| [`docs/diagrams/c4/`](docs/diagrams/c4/) | C4 diagrams (SVG, light and dark) and their generator: `uv run --no-project --with fonttools --with brotli python docs/diagrams/c4/build_c4.py` |
 
 ## Limitations and next steps
 

@@ -1,13 +1,15 @@
-#!/usr/bin/env python3
-"""Build the C4 diagrams for Customer Churn MLOps (context, containers, pipeline components).
+"""Draw the C4 diagrams of Customer Churn MLOps (docs/diagrams/c4/*.svg).
 
-    python docs/diagrams/c4/build_c4.py            # SVG + PNG (needs Chromium)
-    python docs/diagrams/c4/build_c4.py --svg-only
+Three views, each in a light and a dark theme:
+  c4-context    C4 level 1: who uses the system and what it depends on
+  c4-container  C4 level 2: the compose stack, with the opt-in monitoring profile
+  c4-component  C4 level 3: inside the worker, how a scheduled run is gated and recorded
 
-Every element comes from the code at the commit it ships with: docker-compose.yml
-(services, ports, volumes), deploiement_prefect.py (schedules), src/flows.py and
-src/tasks.py (jobs and gates), src/tracking.py (MLflow), src/app.py (API).
-Drawing kit: c4lib.py (shared with the DataOps Lakehouse diagrams).
+Every element comes from the code at the commit it ships with: docker-compose.yml,
+deploiement_prefect.py, src/flows.py, src/tasks.py, src/tracking.py, src/observability.py,
+src/app.py and monitoring/. Drawing kit: c4kit.py (same engine as the Episteme diagrams).
+
+    uv run --no-project --with fonttools --with brotli python docs/diagrams/c4/build_c4.py [--png]
 """
 
 from __future__ import annotations
@@ -17,659 +19,542 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from c4lib import MONO, Canvas, build
+from c4kit import Box, Canvas, View, build
 
-STACK = [
-    "python",
-    "scikitlearn",
-    "prefect",
-    "mlflow",
-    "fastapi",
-    "astro",
-    "docker",
-    "elasticsearch",
+READOUT = [
+    ("HOLDOUT ACCURACY", "85.55%"),
+    ("CHURNER RECALL", "0.42 · 176/415"),
+    ("TESTS", "15 pytest"),
 ]
-W = 2200
+COL = [32, 360, 688, 1016]  # four columns, 224 wide, 104 apart
+W = 224
 
 
-def context(theme: str) -> str:
-    c = Canvas(W, 1000, theme)
-    t = c.t
-    c.header(
-        "C4 MODEL  ·  LEVEL 1  ·  SYSTEM CONTEXT",
-        "Customer Churn MLOps",
-        "Who uses it, and what it depends on.",
-        STACK,
+# ── C4 level 1 · context ───────────────────────────────────────────────────
+def context_view(cv: Canvas):
+    analyst = Box(32, 200, 192, 112)
+    eng = Box(32, 376, 192, 112)
+    system = Box(368, 184, 528, 304)
+    data = Box(1040, 184, 208, 96)
+    github = Box(1040, 288, 208, 96)
+    hub = Box(1040, 392, 208, 96)
+
+    cv.arrow([(analyst.r, 256), (system.x, 256)])
+    cv.label([("scores customers", False), ("browser", True)], 296, 222)
+    cv.arrow([(eng.r, 432), (system.x, 432)])
+    cv.label(
+        [("runs flows,", False), ("reads runs", False), ("browser UIs", True)], 296, 382
     )
-    c.person(
-        80,
-        340,
-        400,
-        140,
+    cv.arrow([(system.r, 232), (data.x, 232)])
+    cv.label([("reads", False)], 968, 216)
+    cv.arrow([(system.r, 336), (github.x, 336)])
+    cv.label([("clones, pulls", False), ("git · local runs", True)], 968, 302)
+    cv.arrow([(system.r, 440), (hub.x, 440)])
+    cv.label([("pulls images", False)], 968, 424)
+
+    cv.node(
+        analyst,
+        "person",
+        "Person",
         "Analyst",
-        ["Scores one customer at a time", "and reads the model report"],
+        None,
+        ["Scores customers,", "reads the model report"],
+        ["user"],
     )
-    c.person(
-        80,
-        610,
-        400,
-        140,
+    cv.node(
+        eng,
+        "person",
+        "Person",
         "ML engineer",
-        ["Runs and schedules the pipeline;", "reads MLflow and Kibana"],
+        None,
+        ["Runs the pipeline,", "watches model quality"],
+        ["user"],
     )
-
-    c.card(
-        700,
-        300,
-        760,
-        470,
-        t["ana"],
-        "SOFTWARE SYSTEM",
+    cv.node(
+        system,
+        "container",
+        "Software system",
         "Customer Churn MLOps",
-        "Docker Compose · 5 services + monitoring profile",
+        "Docker Compose · 5 services + ELK profile",
         [
-            "A bank-churn RandomForest made repeatable:",
-            "four code gates, three scheduled Prefect",
-            "flows, every training run tracked in MLflow.",
+            "A bank-churn RandomForest made repeatable: four",
+            "blocking code gates, three scheduled Prefect flows,",
+            "every training run tracked in MLflow.",
             "",
-            "FastAPI and a browser desk serve it; an opt-in",
-            "ELK profile shows traffic, predictions and",
-            "model quality.",
+            "FastAPI and a browser desk serve the model; an opt-in",
+            "ELK profile shows traffic, predictions and quality.",
             "",
             "Holdout: 85.55% accuracy, churner recall 0.42.",
         ],
-        icons=("prefect", "mlflow", "fastapi"),
-        title_size=30,
-        line_size=17,
+        ["prefect", "mlflow", "fastapi", "elasticsearch"],
+        focal=True,
     )
-
-    c.card(
-        1640,
-        290,
-        480,
-        150,
-        t["ext"],
-        "DATA · IN THE REPOSITORY",
+    cv.node(
+        data,
+        "external",
+        "Data · in the repo",
         "Churn_Modelling.csv",
-        "10,000 customers · 14 columns",
-        ["Bank churn dataset (Kaggle);", "target: Exited"],
-        icons=("csv",),
+        None,
+        ["10,000 customers"],
+        ["file"],
     )
-    c.card(
-        1640,
-        470,
-        480,
-        150,
-        t["ext"],
-        "EXTERNAL SYSTEM",
+    cv.node(
+        github,
+        "external",
+        "External",
         "GitHub",
-        "source repository",
-        ["fetch-source-code clones or", "pulls it before a full run"],
-        icons=("github",),
+        None,
+        ["Source for local runs"],
+        ["github"],
     )
-    c.card(
-        1640,
-        650,
-        480,
-        150,
-        t["ext"],
-        "EXTERNAL SYSTEM",
+    cv.node(
+        hub,
+        "external",
+        "External",
         "Docker Hub",
-        "twelvy1400/churn-mlops-*",
-        ["Prebuilt backend and frontend", "images for docker compose"],
-        icons=("docker",),
+        None,
+        ["twelvy1400/churn-mlops-*"],
+        ["docker"],
     )
 
-    c.arrow([(480, 420), (697, 420)], halo=True)
-    c.label(588, 420, ["Scores customers"], tech="browser")
-    c.arrow([(480, 690), (697, 690)], halo=True)
-    c.label(588, 690, ["Runs flows,", "reads runs"], tech="Prefect · MLflow · Kibana")
-    c.arrow([(1460, 365), (1637, 365)], halo=True)
-    c.label(1548, 365, ["Reads"])
-    c.arrow([(1460, 545), (1637, 545)], halo=True)
-    c.label(1548, 545, ["Clones, pulls"], tech="git")
-    c.arrow([(1460, 725), (1637, 725)], halo=True)
-    c.label(1548, 725, ["Pulls images"])
-
-    c.legend(
-        935,
-        "github.com/adriansalvadorekomo/customer-churn-mlops",
-        items=[
-            ("person", "person", "Person"),
-            ("card", "ops", "Software system"),
-            ("card", "ext", "External system or data"),
-            ("rel", "line", "Uses"),
-        ],
-    )
-    return c.svg(
-        "Customer Churn MLOps — C4 Level 1, system context",
-        "An analyst scores customers and an ML engineer runs the pipeline and reads MLflow and Kibana. The "
-        "system reads the Churn_Modelling.csv dataset, clones or pulls its source from GitHub and pulls "
-        "prebuilt images from Docker Hub.",
-    )
-
-
-def container(theme: str) -> str:
-    WC = 2300
-    c = Canvas(WC, 2040, theme)
-    t = c.t
-    c.header(
-        "C4 MODEL  ·  LEVEL 2  ·  CONTAINER DIAGRAM",
-        "Customer Churn MLOps — the compose stack",
-        "One image, two roles: the backend image serves predictions and runs the scheduled flows.",
-        STACK,
-    )
-    # grid: four columns, gutters sized for their relationship labels
-    X = [90, 670, 1200, 1730]
-    CW = [420, 430, 430, 420]
-    cx = [x + w / 2 for x, w in zip(X, CW, strict=True)]
-    RA, RB, RC = 500, 850, 1270
-
-    c.person(270, 230, 340, 120, "Analyst", ["Scores customers in a browser"])
-    c.person(
-        1500,
-        230,
-        360,
-        120,
-        "ML engineer",
-        ["Runs flows, reads runs and", "the monitoring dashboard"],
-    )
-    c.boundary(
-        40,
-        420,
-        2160,
-        1330,
-        t["ops"],
-        "DOCKER COMPOSE",
-        "churn-mlops",
-        icons=("docker",),
-    )
-
-    # row A: what people use
-    c.card(
-        X[0],
-        RA,
-        CW[0],
-        190,
-        t["ops"],
-        "CONTAINER · STATIC WEB APP",
-        "Churn Desk",
-        "Astro build · nginx · :4321",
-        ["nginx only serves files; the desk", "runs in the analyst's browser"],
-        icons=("astro", "nginx"),
-    )
-    c.card(
-        X[1],
-        RA,
-        CW[1],
-        190,
-        t["ops"],
-        "CONTAINER · REST API",
-        "Prediction API",
-        "FastAPI · uvicorn · :8000",
-        ["POST /predict · GET /health;", "loads classifier.joblib at start"],
-        icons=("fastapi", "python"),
-    )
-    c.card(
-        X[2],
-        RA,
-        CW[2],
-        190,
-        t["ana"],
-        "CONTAINER · ORCHESTRATOR",
-        "Prefect server",
-        "prefect 3.8.8 · :4200",
-        ["Deployments, schedules, run", "state; volume prefect-data"],
-        icons=("prefect",),
-    )
-    c.card(
-        X[3],
-        RA,
-        CW[3],
-        190,
-        t["ana"],
-        "CONTAINER · TRACKING",
-        "MLflow server",
-        "mlflow 3.17.1 · :5000",
-        ["SQLite + proxied artifacts", "on volume mlflow-data"],
-        icons=("mlflow",),
-    )
-    # row B: the worker and its stores
-    c.card(
-        X[1],
-        RB,
-        CW[1],
-        200,
-        t["gold"],
-        "DATA STORE · HOST VOLUME",
-        "./models",
-        "classifier.joblib",
-        ["Written by the worker; the API", "serves it after a restart"],
-        shape="cylinder",
-    )
-    c.card(
-        X[2],
-        RB,
-        CW[2],
-        200,
-        t["ana"],
-        "CONTAINER · PIPELINE",
-        "Worker",
-        "backend image · deploiement_prefect.py",
+    cv.readout(READOUT, 1248, 96)
+    cv.legend(
+        536,
         [
-            "Serves the flows all, train, evaluat",
-            "cron 02:00 · 04:00 · 06:00 UTC",
-            "and runs them in-process",
+            ("person", "person"),
+            ("focal", "the system"),
+            ("external", "external system or data"),
+            ("call", "uses"),
         ],
-        icons=("prefect", "python"),
     )
-    c.card(
-        X[3],
-        RB,
-        CW[3],
-        200,
-        t["gold"],
-        "DATA STORE · READ-ONLY MOUNT",
-        "notebooks/data",
-        "Churn_Modelling.csv",
-        ["10,000 customers; 80/20", "split with seed 1"],
-        shape="cylinder",
+
+
+# ── C4 level 2 · containers ────────────────────────────────────────────────
+def container_view(cv: Canvas):
+    ra, rb, rc = 360, 552, 768
+    analyst = Box(32, 168, 232, 96)
+    eng = Box(840, 168, 248, 96)
+    desk = Box(COL[0], ra, W, 128)
+    api = Box(COL[1], ra, W, 128)
+    prefect = Box(COL[2], ra, W, 128)
+    mlflow = Box(COL[3], ra, W, 128)
+    models = Box(COL[1], rb, W, 128)
+    worker = Box(COL[2], rb, W, 128)
+    data = Box(COL[3], rb, W, 128)
+    filebeat = Box(COL[0], rc, W, 128)
+    logstash = Box(COL[1], rc, W, 128)
+    es = Box(COL[2], rc, W, 128)
+    kibana = Box(COL[3], rc, W, 128)
+    setup = Box(840, 944, 248, 88)
+
+    cv.zone(
+        Box(16, 312, 1240, 776),
+        "CHURN MLOPS",
+        "docker compose · churn-mlops",
+        at="bottom",
+    )
+    cv.zone(
+        Box(24, 728, 1224, 328), "MONITORING", "opt-in profile · ELK 9.5", at="bottom"
     )
 
     # people
-    c.arrow([(440, 350), (440, 497)], halo=True)
-    c.label(440, 455, ["Scores customers"], tech="browser · :4321")
-    c.arrow([(1680, 350), (1680, 455)], head=False)
-    c.arrow([(cx[2], 455), (cx[3], 455)], head=False)
-    c.arrow([(cx[2], 455), (cx[2], 497)])
-    c.arrow([(cx[3], 455), (cx[3], 497)])
-    c.label(1680, 392, ["Triggers flows, reads runs"], tech="browser · :4200 · :5000")
-    c.arrow([(1860, 290), (2245, 290), (2245, 1365), (2153, 1365)], halo=True)
-    c.label(2245, 360, ["Reads"], tech=":5601")
+    cv.arrow([(analyst.cx - 4, analyst.b), (analyst.cx - 4, desk.y)])
+    cv.label(
+        [("scores customers", False), ("browser · :4321", True)],
+        analyst.cx + 8,
+        300,
+        "start",
+    )
+    cv.arrow(
+        [(964, eng.b), (964, 332), (prefect.cx, 332), (prefect.cx, prefect.y)],
+        head=False,
+    )
+    cv.arrow([(prefect.cx, 332), (prefect.cx, prefect.y)])
+    cv.arrow([(964, 332), (mlflow.cx, 332), (mlflow.cx, mlflow.y)])
+    cv.label(
+        [("triggers flows, reads runs", False), ("browser · :4200 · :5000", True)],
+        976,
+        292,
+        "start",
+    )
+    cv.arrow([(eng.r, 216), (1266, 216), (1266, 832), (kibana.r, 832)])
+    cv.label([("dashboard", False), (":5601", True)], 1236, 742, "end")
     # serving
-    c.arrow([(510, 595), (667, 595)], halo=True)
-    c.label(588, 595, ["POST /predict", "from the browser"], tech="JSON · CORS")
-    c.arrow([(cx[1], RA + 190), (cx[1], RB - 3)], halo=True)
-    c.label(cx[1], 770, ["Loads at start"], tech="joblib")
+    cv.arrow([(desk.r, 408), (api.x, 408)])
+    cv.label([("/predict", False), ("JSON · CORS", True)], 308, 372)
+    cv.arrow([(api.cx, api.b), (api.cx, models.y)])
+    cv.label([("loads at start", False), ("joblib", True)], api.cx + 12, 516, "start")
     # pipeline
-    c.arrow([(cx[2], RB - 3), (cx[2], RA + 193)], halo=True)
-    c.label(
-        cx[2], 770, ["Serves deployments,", "reports run state"], tech="Prefect API"
+    cv.arrow([(prefect.cx, worker.y), (prefect.cx, prefect.b)])
+    cv.label(
+        [("polls, reports", False), ("Prefect API", True)], prefect.cx - 12, 516, "end"
     )
-    c.arrow([(1580, RB - 3), (1580, 800), (cx[3], 800), (cx[3], RA + 193)], halo=True)
-    c.label(1800, 800, ["Logs params, metric", "and the model"], tech="MLflow REST")
-    c.arrow([(X[2] - 3, 950), (X[1] + CW[1] + 3, 950)], halo=True)
-    c.label(1150, 950, ["Writes"])
-    c.arrow([(X[2] + CW[2], 990), (X[3] - 3, 990)], halo=True)
-    c.label(1680, 990, ["Reads"])
-
-    # monitoring profile
-    c.boundary(
-        70,
-        1190,
-        2100,
-        520,
-        t["dlv"],
-        "PROFILE · MONITORING",
-        "docker compose --profile monitoring up -d",
-        icons=("elastic",),
-        tab="right",
-    )
-    c.card(
-        X[0],
-        RC,
-        CW[0],
-        200,
-        t["dlv"],
-        "CONTAINER · LOG SHIPPER",
-        "Filebeat",
-        "filebeat 9.5.5",
-        ["Reads the Docker logs of the", "containers labelled churn_logs"],
-        icons=("beats",),
-    )
-    c.card(
-        X[1],
-        RC,
-        CW[1],
-        200,
-        t["dlv"],
-        "CONTAINER · PIPELINE",
-        "Logstash",
-        "logstash 9.5.5 · beats :5044",
-        ["JSON events → churn-events-*", "other lines → churn-logs-*"],
-        icons=("logstash",),
-    )
-    c.card(
-        X[2],
-        RC,
-        CW[2],
-        200,
-        t["dlv"],
-        "DATA STORE · SEARCH",
-        "Elasticsearch",
-        "9.5.5 · single node · :9200",
-        ["Typed by an index template", "(monitoring/kibana/setup.py)"],
-        icons=("elasticsearch",),
-        shape="cylinder",
-    )
-    c.card(
-        X[3],
-        RC,
-        CW[3],
-        200,
-        t["dlv"],
-        "CONTAINER · DASHBOARD",
-        "Kibana",
-        "kibana 9.5.5 · :5601",
-        ["Churn MLOps · monitoring:", "traffic, predictions, quality"],
-        icons=("kibana",),
-    )
-    # Filebeat tails the Docker logs of the API and the worker (autodiscover by label)
-    c.arrow([(300, RC), (300, 1120), (cx[2], 1120), (cx[2], RB + 203)], dashed=True)
-    c.arrow([(600, 1120), (600, 650), (X[1] - 3, 650)], dashed=True)
-    c.label(
-        980,
-        1120,
-        ["Tails their Docker logs:", "JSON events on stdout"],
-        tech="label churn_logs",
-    )
-    c.arrow([(X[0] + CW[0], 1370), (X[1] - 3, 1370)], halo=True)
-    c.label(590, 1370, ["Ships"], tech="beats")
-    c.arrow([(X[1] + CW[1], 1370), (X[2] - 3, 1370)], halo=True)
-    c.label(1150, 1370, ["Indexes"])
-    c.arrow([(X[3], 1370), (X[2] + CW[2] + 3, 1370)], halo=True)
-    c.label(1680, 1370, ["Queries"])
-    c.card(
-        1450,
-        1540,
-        460,
-        150,
-        t["dlv"],
-        "CONTAINER · ONE-SHOT",
-        "monitoring-setup",
-        "backend image · setup.py",
-        ["Index template, data view", "and the Kibana dashboard"],
-        title_size=19,
-    )
-    c.arrow([(1500, 1537), (1500, RC + 203)])
-    c.label(1500, 1505, ["Template"])
-    c.arrow([(1860, 1537), (1860, RC + 203)])
-    c.label(1860, 1505, ["Dashboard"])
-    c.text(100, 1600, "Local only: Elastic security off;", 14, 400, t["muted"], MONO)
-    c.text(
-        100,
-        1626,
-        "every monitoring port is bound to 127.0.0.1.",
-        14,
-        400,
-        t["muted"],
-        MONO,
-    )
-
-    c.text(
-        60,
-        1805,
-        "A retrained model lands in ./models; `docker compose restart backend` serves it.",
-        15,
-        400,
-        t["muted"],
-        MONO,
-    )
-    c.text(
-        60,
-        1835,
-        "The desk calls the API URL baked at build time (PUBLIC_API_URL, default http://localhost:8000).",
-        15,
-        400,
-        t["muted"],
-        MONO,
-    )
-    c.text(
-        60,
-        1865,
-        "A tracking outage is a warning, never a pipeline failure (src/tracking.py).",
-        15,
-        400,
-        t["muted"],
-        MONO,
-    )
-    c.legend(
-        1975,
-        "docker-compose.yml · deploiement_prefect.py · monitoring/",
-        items=[
-            ("person", "person", "Person"),
-            ("card", "ops", "Container"),
-            ("store", "gold", "Data store"),
-            ("boundary", "ops", "Deployment boundary"),
-            ("rel", "line", "Uses"),
-            ("rel_dashed", "line", "Reads logs"),
-        ],
-    )
-    return c.svg(
-        "Customer Churn MLOps — C4 Level 2, containers",
-        "In Docker Compose, nginx serves the static Churn Desk (port 4321); it runs in the analyst's browser, which "
-        "calls the FastAPI prediction API (port 8000) directly, cross-origin. The API loads classifier.joblib from the "
-        "./models volume at start. The worker, built from "
-        "the same image, serves the three Prefect deployments against the Prefect server (port 4200), reads "
-        "Churn_Modelling.csv, writes the model to ./models and logs every run to MLflow (port 5000). In the opt-in "
-        "monitoring profile, Filebeat tails the Docker logs of the API and the worker and ships their JSON events to "
-        "Logstash, which indexes them in Elasticsearch; a one-shot setup container creates the index template and the "
-        "Kibana dashboard (port 5601) read by the ML engineer.",
-    )
-
-
-def component(theme: str) -> str:
-    c = Canvas(W, 1600, theme)
-    t = c.t
-    c.header(
-        "C4 MODEL  ·  LEVEL 3  ·  COMPONENTS",
-        "Inside the pipeline (src/)",
-        "Pure logic in model_pipeline.py; tasks.py wraps each job as a Prefect task; flows.py chains them.",
-        STACK,
-    )
-    c.boundary(
-        40,
-        270,
-        2120,
-        920,
-        t["ana"],
-        "CONTAINER",
-        "Worker · src/ + deploiement_prefect.py",
-        icons=("prefect",),
-    )
-
-    c.card(
-        80,
-        340,
-        420,
-        200,
-        t["ana"],
-        "COMPONENT",
-        "Deployments",
-        "deploiement_prefect.py · prefect.serve",
+    cv.arrow([(worker.r, 568), (964, 568), (964, 456), (mlflow.x, 456)])
+    cv.label([("logs runs", False), ("MLflow REST", True)], 964, 504)
+    cv.arrow([(worker.x, 616), (models.r, 616)])
+    cv.label([("writes", False), ("joblib", True)], 636, 580)
+    cv.arrow([(worker.r, 648), (data.x, 648)])
+    cv.label([("reads", False), ("read-only", True)], 964, 612)
+    # monitoring: Filebeat tails the Docker logs of the API and the worker
+    cv.arrow(
         [
-            "all 02:00 · train 04:00 ·",
-            "evaluat 06:00 (cron, UTC)",
-            "--container skips fetch + install",
+            (filebeat.cx, filebeat.y),
+            (filebeat.cx, 712),
+            (312, 712),
+            (312, 456),
+            (api.x, 456),
         ],
+        dashed=True,
     )
-    c.card(
-        80,
-        640,
-        420,
-        220,
-        t["ana"],
-        "COMPONENT",
-        "Flows",
-        "src/flows.py",
-        [
-            "all: fetch → install → gates →",
-            "prepare → train → evaluate →",
-            "save → load",
-            "train / evaluat: subsets",
-        ],
-    )
-    c.arrow([(290, 540), (290, 637)], halo=True)
-    c.label(300, 590, ["triggers"], anchor="start")
+    cv.arrow([(312, 712), (worker.cx, 712), (worker.cx, worker.b)], dashed=True)
+    cv.label([("tails Docker logs", False), ("label churn_logs", True)], 560, 700)
+    cv.arrow([(filebeat.r, 832), (logstash.x, 832)])
+    cv.label([("ships", False), ("beats", True)], 308, 796)
+    cv.arrow([(logstash.r, 832), (es.x, 832)])
+    cv.label([("indexes", False)], 636, 816)
+    cv.arrow([(kibana.x, 832), (es.r, 832)])
+    cv.label([("queries", False)], 964, 816)
+    cv.arrow([(868, setup.y), (868, es.b)])
+    cv.label([("template", False)], 856, 928, "end")
+    cv.arrow([(1060, setup.y), (1060, kibana.b)])
+    cv.label([("dashboard", False)], 1072, 928, "start")
+    cv.note("security off · ports on 127.0.0.1", 48, 1000)
 
-    gx, gw, gap = 590, 360, 30
-    gates = [
-        ("format-code", "ruff format", "src tests main.py …"),
-        ("lint-code", "ruff check", "any violation fails"),
-        ("scan-security", "bandit -c pyproject.toml", "every severity fails"),
-        ("run-unit-tests", "pytest", "15 tests"),
-    ]
-    for i, (name, tool, note) in enumerate(gates):
-        x = gx + i * (gw + gap)
-        c.card(
-            x,
-            340,
-            gw,
-            160,
-            t["ok"],
-            "GATE · BLOCKING",
-            name,
-            tool,
-            [note],
-            title_size=19,
-        )
-    c.text(
-        gx,
-        535,
-        "Code gates run right after install, before anything trains: one failure stops the flow.",
-        15,
-        500,
-        t["ok"],
-        MONO,
+    # elements
+    cv.node(
+        analyst, "person", "Person", "Analyst", None, ["Scores customers"], ["user"]
     )
-
-    jobs = [
-        (
-            "prepare-data",
-            "model_pipeline.prepare_data",
-            ["LabelEncode Gender, drop", "IDs + Geography, 80/20 split"],
-        ),
-        ("train-model", "RandomForestClassifier", ["100 trees, random_state 42"]),
-        (
-            "evaluate-model",
-            "accuracy · report · matrix",
-            ["85.55% on the 2,000-row", "holdout · recall 0.42"],
-        ),
-        ("save / load", "joblib", ["save, then reload and", "predict a demo customer"]),
-    ]
-    for i, (name, tech, lines) in enumerate(jobs):
-        x = gx + i * (gw + gap)
-        c.card(
-            x,
-            640,
-            gw,
-            180,
-            t["ana"],
-            "TASK · src/tasks.py",
-            name,
-            tech,
-            lines,
-            title_size=19,
-        )
-        if i:
-            c.arrow([(x - gap - 2, 730), (x - 3, 730)])
-    c.arrow([(500, 680), (gx - 45, 680), (gx - 45, 420), (gx - 3, 420)], halo=True)
-    c.label(gx - 45, 590, ["1 · gates"])
-    c.arrow([(500, 770), (gx - 3, 770)], halo=True)
-    c.label(gx - 45, 770, ["2 · jobs"])
-
-    # inside the worker: tracking.py and observability.py, called by flows.py after a run
-    ex = gx + gw + gap
-    c.card(
-        gx,
-        930,
-        gw,
-        170,
-        t["ana"],
-        "COMPONENT",
-        "Tracking",
-        "src/tracking.py",
-        ["params, accuracy, sklearn model;", "outage → warning, not failure"],
-        icons=("mlflow",),
-        title_size=19,
+    cv.node(
+        eng,
+        "person",
+        "Person",
+        "ML engineer",
+        None,
+        ["Runs flows, reads runs"],
+        ["user"],
     )
-    c.card(
-        ex,
-        930,
-        gw,
-        170,
-        t["dlv"],
-        "COMPONENT",
-        "Events",
-        "src/observability.py",
-        ["training_run / evaluation_run", "as one JSON line on stdout"],
-        title_size=19,
+    cv.node(
+        desk,
+        "container",
+        "Container",
+        "Churn Desk",
+        "Astro · nginx · :4321",
+        ["Static files; runs in the", "browser, calls the API"],
+        ["astro", "nginx"],
     )
-    c.arrow([(290, 860), (290, 885), (ex + gw / 2, 885)], head=False)
-    c.arrow([(gx + gw / 2, 885), (gx + gw / 2, 927)])
-    c.arrow([(ex + gw / 2, 885), (ex + gw / 2, 927)])
-    c.label(440, 885, ["After a run: log it,", "emit the event"])
-
-    # outside the worker container
-    sx = gx + 3 * (gw + gap)
-    c.card(
-        gx,
-        1270,
-        gw,
-        170,
-        t["ext"],
-        "CONTAINER · OUTSIDE THIS ONE",
+    cv.node(
+        api,
+        "container",
+        "Container",
+        "Prediction API",
+        "FastAPI · :8000",
+        ["Model loaded at start;", "/predict and /health"],
+        ["fastapi", "python"],
+    )
+    cv.node(
+        prefect,
+        "container",
+        "Container",
+        "Prefect server",
+        "Prefect 3.8 · :4200",
+        ["Deployments, schedules", "and run state"],
+        ["prefect"],
+    )
+    cv.node(
+        mlflow,
+        "container",
+        "Container",
         "MLflow server",
-        "experiment: customer-churn",
-        ["one run per training: params,", "accuracy and the model"],
-        icons=("mlflow",),
-        title_size=19,
+        "MLflow 3.17 · :5000",
+        ["SQLite + proxied", "artifacts on a volume"],
+        ["mlflow"],
     )
-    c.card(
-        sx,
-        1270,
-        gw,
-        170,
-        t["gold"],
-        "DATA STORE · HOST VOLUME",
+    cv.node(
+        models,
+        "store",
+        "Data store · volume",
         "./models",
         "classifier.joblib",
-        ["read by the API at start"],
-        shape="cylinder",
-        title_size=19,
+        ["Written by the worker,", "read by the API"],
     )
-    c.arrow([(gx + gw / 2, 1100), (gx + gw / 2, 1267)], halo=True)
-    c.label(gx + gw / 2, 1225, ["Logs runs"], tech="MLflow REST")
-    c.arrow([(sx + gw / 2, 823), (sx + gw / 2, 1267)], halo=True)
-    c.label(sx + gw / 2, 1225, ["Writes, reads"], tech="joblib")
+    cv.node(
+        worker,
+        "container",
+        "Container",
+        "Worker",
+        "backend image · serve",
+        ["Code gates, then train", "and evaluate, 02–06 UTC"],
+        ["prefect", "python"],
+        focal=True,
+    )
+    cv.node(
+        data,
+        "store",
+        "Data store · read-only",
+        "notebooks/data",
+        "Churn_Modelling.csv",
+        ["10,000 customers;", "80/20 split, seed 1"],
+    )
+    cv.node(
+        filebeat,
+        "container",
+        "Container",
+        "Filebeat",
+        "Filebeat 9.5",
+        ["Tails the containers", "labelled churn_logs"],
+        ["beats"],
+    )
+    cv.node(
+        logstash,
+        "container",
+        "Container",
+        "Logstash",
+        "Logstash 9.5 · :5044",
+        ["JSON → churn-events-*", "text → churn-logs-*"],
+        ["logstash"],
+    )
+    cv.node(
+        es,
+        "store",
+        "Data store",
+        "Elasticsearch",
+        "9.5 · single node",
+        ["Fields typed by an", "index template"],
+        ["elasticsearch"],
+    )
+    cv.node(
+        kibana,
+        "container",
+        "Container",
+        "Kibana",
+        "Kibana 9.5 · :5601",
+        ["Traffic, predictions,", "model quality"],
+        ["kibana"],
+    )
+    cv.node(
+        setup,
+        "container",
+        "Container · one-shot",
+        "monitoring-setup",
+        "monitoring/kibana/setup.py",
+        [],
+    )
 
-    c.legend(
-        1535,
-        "src/flows.py · src/tasks.py · src/model_pipeline.py · src/tracking.py",
-        items=[
-            ("card", "ops", "Component"),
-            ("card", "ok", "Gate: one failure stops the flow"),
-            ("card", "ext", "Other container"),
-            ("store", "gold", "Data store"),
-            ("boundary", "ana", "Container boundary"),
-            ("rel", "line", "Calls / data flow"),
+    cv.readout(READOUT, 1248, 96)
+    cv.legend(
+        1104,
+        [
+            ("person", "person"),
+            ("container", "container"),
+            ("focal", "where models are trained"),
+            ("store", "data store"),
+            ("call", "call / read / write"),
+            ("occasional", "reads logs"),
         ],
     )
-    return c.svg(
-        "Customer Churn MLOps — C4 Level 3, pipeline components",
-        "Three deployments trigger the flows. The full flow runs four blocking code gates (ruff format, ruff "
-        "check, bandit, pytest), then prepare-data, train-model (RandomForest, 100 trees), evaluate-model "
-        "(85.55% accuracy, recall 0.42) and save/load with joblib. After a run, flows.py logs it to MLflow through "
-        "tracking.py and prints a JSON event through observability.py.",
+
+
+# ── C4 level 3 · components of the worker ──────────────────────────────────
+def component_view(cv: Canvas):
+    c1, c2, c3, c4 = 64, 372, 680, 988  # four columns, 228 wide, 80 apart
+    w = 228
+    deploy = Box(c1, 184, w, 128)
+    gates = Box(c2, 184, 844, 128)
+    flows = Box(c1, 376, w, 128)
+    prep = Box(c2, 376, w, 128)
+    train = Box(c3, 376, w, 128)
+    evalb = Box(c4, 376, w, 128)
+    track = Box(c2, 568, w, 128)
+    events = Box(c3, 568, w, 128)
+    save = Box(c4, 568, w, 128)
+    mlflow = Box(c2, 776, w, 96)
+    models = Box(c4, 776, w, 96)
+
+    cv.zone(
+        Box(32, 160, 1216, 568),
+        "WORKER",
+        "container · src/ + deploiement_prefect.py",
+        at="bottom",
     )
 
+    cv.arrow([(deploy.cx, deploy.b), (deploy.cx, flows.y)])
+    cv.label([("triggers", False), ("cron", True)], deploy.cx + 12, 338, "start")
+    cv.arrow([(flows.r, 400), (332, 400), (332, 248), (gates.x, 248)])
+    cv.label([("1 · gates", False)], 332, 330)
+    cv.arrow([(flows.r, 456), (prep.x, 456)])
+    cv.label([("2 · jobs", False)], 332, 440)
+    cv.arrow([(prep.r, 440), (train.x, 440)])
+    cv.arrow([(train.r, 440), (evalb.x, 440)])
+    cv.arrow([(evalb.cx, evalb.b), (evalb.cx, save.y)])
+    cv.arrow(
+        [(flows.cx, flows.b), (flows.cx, 536), (events.cx, 536), (events.cx, events.y)]
+    )
+    cv.arrow([(track.cx, 536), (track.cx, track.y)])
+    cv.label([("after a run", False), ("log it, emit the event", True)], 640, 524)
+    cv.arrow([(track.cx, track.b), (track.cx, mlflow.y)])
+    cv.label([("logs runs", False), ("MLflow REST", True)], track.cx + 12, 748, "start")
+    cv.arrow([(save.cx, save.b), (save.cx, models.y)])
+    cv.label([("writes, reads", False), ("joblib", True)], save.cx + 12, 748, "start")
+
+    cv.node(
+        deploy,
+        "container",
+        "Component",
+        "Deployments",
+        "deploiement_prefect.py",
+        ["all · train · evaluat", "02:00 · 04:00 · 06:00 UTC"],
+        ["prefect"],
+    )
+    cv.node(
+        gates,
+        "container",
+        "Components · blocking",
+        "Code gates",
+        "src/tasks.py · run before anything trains",
+        [
+            "ruff format  ·  ruff check  ·  bandit, every severity  ·  pytest, 15 tests",
+            "one failure stops the flow; the same four checks run in GitHub Actions",
+        ],
+        focal=True,
+    )
+    cv.node(
+        flows,
+        "container",
+        "Component",
+        "Flows",
+        "src/flows.py",
+        ["all: install, gates, jobs;", "train and evaluat: subsets"],
+    )
+    cv.node(
+        prep,
+        "container",
+        "Task",
+        "prepare-data",
+        "model_pipeline.py",
+        ["Encode Gender, drop IDs", "and Geography; 80/20"],
+    )
+    cv.node(
+        train,
+        "container",
+        "Task",
+        "train-model",
+        "RandomForestClassifier",
+        ["100 trees,", "random_state 42"],
+        ["scikitlearn"],
+    )
+    cv.node(
+        evalb,
+        "container",
+        "Task",
+        "evaluate-model",
+        "accuracy · report · matrix",
+        ["85.55% on 2,000 rows;", "churner recall 0.42"],
+    )
+    cv.node(
+        track,
+        "container",
+        "Component",
+        "Tracking",
+        "src/tracking.py",
+        ["Outage = warning,", "never a failure"],
+        ["mlflow"],
+    )
+    cv.node(
+        events,
+        "container",
+        "Component",
+        "Events",
+        "src/observability.py",
+        ["One JSON line per run", "on stdout"],
+    )
+    cv.node(
+        save,
+        "container",
+        "Task",
+        "save / load",
+        "joblib",
+        ["Save, reload, predict", "a demo customer"],
+    )
+    cv.node(
+        mlflow,
+        "external",
+        "Container · outside",
+        "MLflow server",
+        "experiment customer-churn",
+        [],
+        ["mlflow"],
+    )
+    cv.node(
+        models, "store", "Data store · outside", "./models", "classifier.joblib", []
+    )
+
+    cv.readout(
+        [
+            ("CODE GATES", "4 · blocking"),
+            ("SCHEDULE", "02 · 04 · 06 UTC"),
+            ("FULL FLOW", "9 tasks · 5 s"),
+        ],
+        1248,
+        96,
+    )
+    cv.legend(
+        904,
+        [
+            ("container", "component"),
+            ("focal", "the gates: one failure stops the flow"),
+            ("store", "data store"),
+            ("external", "outside the worker"),
+            ("call", "call / data flow"),
+        ],
+    )
+
+
+VIEWS = [
+    View(
+        "context",
+        context_view,
+        1280,
+        592,
+        "c4 model · level 1 · context",
+        "Customer Churn MLOps",
+        "bank churn model, retrained on a schedule behind code gates",
+        "Customer Churn MLOps — C4 context view",
+        "C4 context diagram: an analyst scores customers and an ML engineer runs the pipeline and reads MLflow and "
+        "Kibana. The system reads the Churn_Modelling.csv dataset, clones or pulls its source from GitHub for "
+        "local runs and pulls prebuilt images from Docker Hub.",
+    ),
+    View(
+        "container",
+        container_view,
+        1280,
+        1152,
+        "c4 model · level 2 · containers",
+        "The compose stack",
+        "one image, two roles: it serves predictions and runs the flows",
+        "Customer Churn MLOps — C4 container view",
+        "C4 container diagram: nginx serves the static Churn Desk, which runs in the analyst's browser and calls the "
+        "FastAPI prediction API directly; the API loads classifier.joblib from the ./models volume at start. The "
+        "worker, built from the same image, polls the Prefect server for scheduled runs, reads the dataset "
+        "read-only, writes the model to ./models and logs every run to MLflow. In the opt-in monitoring profile "
+        "Filebeat tails the Docker logs of the API and the worker, Logstash indexes their JSON events in "
+        "Elasticsearch, a one-shot setup container creates the index template and the dashboard, and Kibana "
+        "shows it to the ML engineer.",
+    ),
+    View(
+        "component",
+        component_view,
+        1280,
+        960,
+        "c4 model · level 3 · worker components",
+        "Inside the pipeline",
+        "pure logic in model_pipeline.py; tasks.py wraps it; flows.py chains it",
+        "Customer Churn MLOps — C4 component view of the worker",
+        "C4 component diagram of the worker: three Prefect deployments trigger the flows; the full flow first runs "
+        "four blocking code gates (ruff format, ruff check, bandit, pytest), then prepare-data, train-model, "
+        "evaluate-model and save/load. After a run, flows.py logs it to the MLflow server through tracking.py and "
+        "prints a JSON event through observability.py; save/load writes classifier.joblib to the ./models volume.",
+    ),
+]
 
 if __name__ == "__main__":
-    build(
-        HERE,
-        (
-            ("context", context, (W, 1000)),
-            ("container", container, (2300, 2040)),
-            ("component", component, (W, 1600)),
-        ),
-    )
+    build(HERE, "customer-churn-mlops", VIEWS)

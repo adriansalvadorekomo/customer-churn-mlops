@@ -1,7 +1,7 @@
-"""C4 drawing kit shared by the project READMEs (same look as the DataOps Lakehouse diagrams).
+"""C4 drawing kit shared by the project READMEs, in the identity of the portfolio (DESIGN.md).
 
 Canvas primitives: header, cards (containers, stores, externals), people, boundaries,
-arrows, relationship labels, legend. SVGs embed Inter / JetBrains Mono (OFL) as base64
+arrows, relationship labels, legend. SVGs embed Schibsted Grotesk / IBM Plex Mono (OFL) as base64
 woff2 and technology logos as inline Simple Icons paths (CC0, assets/icons.json), so
 they render offline; PNGs are taken at 2x with headless Chromium.
 
@@ -26,80 +26,89 @@ ASSETS = HERE / "assets"
 ICONS = json.loads((ASSETS / "icons.json").read_text())["icons"]
 
 
-# ── themes ──────────────────────────────────────────────────────────────────
-THEMES = {
-    "dark": {
-        "bg": "#0A0E17",
-        "grid": "#141A26",
-        "text": "#E8ECF3",
-        "muted": "#9AA4B5",
-        "faint": "#5E6879",
-        "card": "#111726",
-        "card2": "#0D1320",
-        "border": "#232C3D",
-        "tile": "#0B101B",
-        "line": "#7D889B",
-        "halo": "#0A0E17",
-        "ops": "#5B9BFF",
-        "ana": "#FF6A4D",
-        "dlv": "#A98BFF",
-        "ext": "#8C97A8",
-        "person": "#3CC6E8",
-        "bronze": "#D08A52",
-        "silver": "#C3CCD7",
-        "gold": "#EFC04F",
-        "ok": "#3DDC97",
-        "dark_logo": "#E8ECF3",
-    },
-    "light": {
-        "bg": "#F6F7F9",
-        "grid": "#E6E9EE",
-        "text": "#0E1726",
-        "muted": "#4A5568",
-        "faint": "#8A94A6",
-        "card": "#FFFFFF",
-        "card2": "#FBFCFD",
-        "border": "#D9DFE7",
-        "tile": "#F1F4F8",
-        "line": "#7A8699",
-        "halo": "#F6F7F9",
-        "ops": "#1F63E0",
-        "ana": "#E2401F",
-        "dlv": "#6D3FE0",
-        "ext": "#64748B",
-        "person": "#0A86B3",
-        "bronze": "#A5602A",
-        "silver": "#6E7C8C",
-        "gold": "#B07D0A",
-        "ok": "#0E9F6E",
-        "dark_logo": "#0E1726",
-    },
+# ── themes: the "instrument" identity (portfolio DESIGN.md) ─────────────────
+# Two grounds, one signal. Graphite (dark) and aluminium (light) plates, silkscreen
+# mono labels, and exactly one colour: orange, reserved for the gate, the step where
+# bad data, code or a model is stopped. Every other category key resolves to the
+# same neutral ink; a card says what it is in its silkscreen line, not with a hue.
+_DARK = {
+    "bench": "#121212",
+    "plate": "#191919",
+    "card": "#1e1e1d",
+    "card2": "#232322",
+    "line": "#2e2e2d",
+    "strong": "#4a4945",
+    "text": "#ebe9e4",
+    "muted": "#c4c0b7",
+    "faint": "#9d998f",
+    "arrow": "#a8a49b",
+    "signal": "#ff4f00",
+    "signal_text": "#ff6a26",
+    "display": "#0d0d0d",
+    "display_off": "#232323",
+    "display_dim": "#8a867e",
+    "highlight": "rgba(255,255,255,0.06)",
+    "led_off": "#3a3a3a",
+    "external": "#7d796f",
+    "logo": "#c4c0b7",
+}
+_LIGHT = {
+    "bench": "#d9d6cf",
+    "plate": "#e8e6e1",
+    "card": "#f1efeb",
+    "card2": "#e9e7e2",
+    "line": "#c9c5bc",
+    "strong": "#a9a59c",
+    "text": "#121212",
+    "muted": "#3b3833",
+    "faint": "#57534c",
+    "arrow": "#57534c",
+    "signal": "#ff4f00",
+    "signal_text": "#a33300",
+    "display": "#0d0d0d",
+    "display_off": "#232323",
+    "display_dim": "#8a867e",
+    "highlight": "rgba(255,255,255,0.6)",
+    "led_off": "#c9c5bc",
+    "external": "#8a8478",
+    "logo": "#3b3833",
 }
 
-SANS = "Inter, 'Segoe UI', Helvetica, Arial, sans-serif"
-MONO = "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace"
+
+def _theme(p: dict) -> dict:
+    t = dict(p)
+    # compatibility keys used by the build scripts: neutral categories, one signal
+    for k in ("ops", "ana", "dlv", "gold", "person", "bronze", "silver"):
+        t[k] = p["faint"]
+    t["ext"] = p["external"]
+    t["ok"] = p["signal_text"]  # gates: orange outline, lit LED
+    t["bg"] = p["bench"]
+    t["border"] = p["line"]
+    t["tile"] = p["card2"]
+    t["halo"] = p["plate"]
+    t["dark_logo"] = p["logo"]
+    return t
+
+
+THEMES = {"dark": _theme(_DARK), "light": _theme(_LIGHT)}
+
+SANS = "'Schibsted Grotesk', ui-sans-serif, system-ui, sans-serif"
+MONO = "'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace"
 
 
 def font_css() -> str:
     faces = [
-        ("Inter", 400, "inter-latin-400-normal"),
-        ("Inter", 500, "inter-latin-500-normal"),
-        ("Inter", 600, "inter-latin-600-normal"),
-        ("Inter", 700, "inter-latin-700-normal"),
-        ("Inter", 800, "inter-latin-800-normal"),
-        ("Inter", 400, "inter-latin-ext-400-normal"),
-        ("Inter", 600, "inter-latin-ext-600-normal"),
-        ("Inter", 700, "inter-latin-ext-700-normal"),
-        ("JetBrains Mono", 400, "jetbrains-mono-latin-400-normal"),
-        ("JetBrains Mono", 500, "jetbrains-mono-latin-500-normal"),
+        ("Schibsted Grotesk", 400, "schibsted-grotesk-latin-400-normal"),
+        ("Schibsted Grotesk", 500, "schibsted-grotesk-latin-500-normal"),
+        ("IBM Plex Mono", 400, "ibm-plex-mono-latin-400-normal"),
+        ("IBM Plex Mono", 500, "ibm-plex-mono-latin-500-normal"),
     ]
     out = []
     for fam, w, f in faces:
         b64 = base64.b64encode((ASSETS / "fonts" / f"{f}.woff2").read_bytes()).decode()
-        rng = ";unicode-range:U+0100-02BA,U+20A0-20C0,U+2113" if "ext" in f else ""
         out.append(
             f"@font-face{{font-family:'{fam}';font-weight:{w};font-style:normal;"
-            f"src:url(data:font/woff2;base64,{b64}) format('woff2'){rng}}}"
+            f"src:url(data:font/woff2;base64,{b64}) format('woff2')}}"
         )
     return "".join(out)
 
@@ -174,29 +183,21 @@ class Canvas:
 
     # icons -----------------------------------------------------------------
     def logo(self, slug, x, y, size, color=None, layer=None):
+        """Technology marks are printed like silkscreen: one ink, never brand colours."""
         ic = ICONS[slug]
-        col = color or f"#{ic['hex']}"
-        if self._too_close(col):
-            col = self.t["dark_logo"]
+        col = color or self.t["logo"]
         s = size / 24
         (layer if layer is not None else self.front).append(
             f'<path transform="translate({x:.1f},{y:.1f}) scale({s:.4f})" fill="{col}" d="{ic["path"]}">'
             f"<title>{escape(ic['title'])}</title></path>"
         )
 
-    def _too_close(self, hex_col: str) -> bool:
-        """Swap logos that vanish on the background (e.g. GitHub's near-black)."""
-        h = hex_col.lstrip("#")
-        r, g, b = (int(h[i : i + 2], 16) / 255 for i in (0, 2, 4))
-        lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        return lum < 0.12 if self.theme == "dark" else lum > 0.80
-
-    def tile(self, slug, x, y, size=34, layer=None):
+    def tile(self, slug, x, y, size=34, layer=None, color=None):
         layer = layer if layer is not None else self.front
         t = self.t
         layer.append(
-            f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="{size * 0.26:.1f}" '
-            f'fill="{t["tile"]}" stroke="{t["border"]}" stroke-width="1"/>'
+            f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="4" '
+            f'fill="{t["card2"]}" stroke="{t["line"]}" stroke-width="1"/>'
         )
         if slug == "delta":
             self.delta_glyph(x + size / 2, y + size / 2, size * 0.58, layer)
@@ -207,8 +208,8 @@ class Canvas:
         elif slug not in ICONS:
             self.box_glyph(x + size / 2, y + size / 2, size * 0.56, layer)
         else:
-            pad = size * 0.2
-            self.logo(slug, x + pad, y + pad, size - 2 * pad, layer=layer)
+            pad = size * 0.22
+            self.logo(slug, x + pad, y + pad, size - 2 * pad, color=color, layer=layer)
 
     def delta_glyph(self, cx, cy, s, layer):
         """Generic delta mark for Delta Lake (Simple Icons has no Delta Lake logo)."""
@@ -256,7 +257,6 @@ class Canvas:
             f'{y + h * 0.75:.1f} H{x + w * 0.78:.1f}" stroke="{c}" stroke-width="1.6"/>'
         )
 
-    # cards -----------------------------------------------------------------
     def card(
         self,
         x,
@@ -273,10 +273,18 @@ class Canvas:
         title_size=21,
         line_size=14.5,
     ):
+        """A plate on the faceplate. accent t["ok"] = a gate (orange outline, lit LED);
+        accent t["ext"] = an external system (dashed edge). Everything else is neutral."""
         t = self.t
         self._quiet += 1
         self._box("card", title, x, y, w, h)
-        cid = self.uid()
+        gate = accent == t["ok"]
+        external = accent == t["ext"]
+        edge = (
+            t["signal"] if gate else t["strong"] if shape == "cylinder" else t["line"]
+        )
+        sw = 1.6 if gate else 1.1
+        dash = ' stroke-dasharray="6 4"' if external else ""
         if shape == "cylinder":
             e = 11
             body = (
@@ -284,44 +292,58 @@ class Canvas:
                 f"A{w / 2},{e} 0 0 1 {x},{y + h - e} Z"
             )
             self.front.append(
-                f'<path d="{body}" fill="{t["card"]}" stroke="{t["border"]}" stroke-width="1.25"/>'
+                f'<path d="{body}" fill="{t["card"]}" stroke="{edge}" stroke-width="{sw}"{dash}/>'
             )
             self.front.append(
                 f'<ellipse cx="{x + w / 2}" cy="{y + e}" rx="{w / 2}" ry="{e}" fill="{t["card2"]}" '
-                f'stroke="{accent}" stroke-width="2"/>'
+                f'stroke="{edge}" stroke-width="{sw}"/>'
             )
             top = y + 2 * e - 4
         else:
-            self.defs.append(
-                f'<clipPath id="{cid}"><rect x="{x}" y="{y}" width="{w}" height="{h}" rx="14"/></clipPath>'
+            self.front.append(
+                f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="6" fill="{t["card"]}" '
+                f'stroke="{edge}" stroke-width="{sw}"{dash}/>'
             )
             self.front.append(
-                f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="14" fill="{t["card"]}" '
-                f'stroke="{t["border"]}" stroke-width="1.25" filter="url(#shadow)"/>'
-            )
-            self.front.append(
-                f'<rect x="{x}" y="{y}" width="{w}" height="4" fill="{accent}" clip-path="url(#{cid})"/>'
+                f'<path d="M{x + 6},{y + 1.5} H{x + w - 6}" stroke="{t["highlight"]}" stroke-width="1"/>'
             )
             top = y
         px = x + 20
-        # vertical rhythm scales with the type sizes (system cards use larger text)
         big = title_size > 24
         y_title = top + (72 if big else 61)
         y_tech = y_title + (27 if big else 23)
         lh = 20 if line_size <= 15 else round(line_size * 1.5)
         y_lines = y_tech + (34 if big else 27)
-        self.text(px, top + 31, eyebrow, 11.5, 500, accent, MONO, spacing=1.1)
+        # status LED + silkscreen line
+        led = t["signal"] if gate else t["led_off"]
+        self.front.append(
+            f'<rect x="{px}" y="{top + 22}" width="9" height="9" rx="2" fill="{led}"/>'
+        )
+        self.text(
+            px + 17,
+            top + 31,
+            eyebrow,
+            11.5,
+            500,
+            t["signal_text"] if gate else t["faint"],
+            MONO,
+            spacing=0.9,
+        )
         n = len(icons)
         for i, slug in enumerate(icons):
             self.tile(slug, x + w - 16 - 32 * (n - i) - 6 * (n - 1 - i), top + 14, 32)
-        self.text(px, y_title, title, title_size, 700)
+        self.text(px, y_title, title, title_size, 500, spacing=-0.02 * title_size)
         if tech:
-            self.text(px, y_tech, tech, 13.5 if big else 12.5, 400, t["muted"], MONO)
+            self.text(px, y_tech, tech, 13.5 if big else 12.5, 400, t["faint"], MONO)
         for i, ln in enumerate(lines):
             self.text(px, y_lines + i * lh, ln, line_size, 400, t["muted"])
         icons_w = n * 38
         self._fits(
-            f"card {title!r} eyebrow", eyebrow, 11.5, w - 40 - icons_w, mono=True
+            f"card {title!r} eyebrow",
+            eyebrow,
+            11.5,
+            w - 57 - icons_w - 0.9 * len(eyebrow),
+            mono=True,
         )
         self._fits(
             f"card {title!r} title",
@@ -330,7 +352,9 @@ class Canvas:
             w - 40 - (icons_w if title_size > 22 else 0),
         )
         if tech:
-            self._fits(f"card {title!r} tech", tech, 12.5, w - 40, mono=True)
+            self._fits(
+                f"card {title!r} tech", tech, 13.5 if big else 12.5, w - 40, mono=True
+            )
         for ln in lines:
             self._fits(f"card {title!r} line", ln, line_size, w - 40)
         if lines and y_lines + (len(lines) - 1) * lh + 8 > y + h - 6:
@@ -343,21 +367,20 @@ class Canvas:
         t = self.t
         self._quiet += 1
         self._box("person", title, x, y - 23, w, h + 23)
-        c = color or t["person"]
         cx = x + w / 2
         self.front.append(
-            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="28" fill="{t["card"]}" '
-            f'stroke="{c}" stroke-width="1.6" filter="url(#shadow)"/>'
+            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="10" fill="{t["card"]}" '
+            f'stroke="{t["strong"]}" stroke-width="1.2"/>'
+            f'<path d="M{x + 10},{y + 1.5} H{x + w - 10}" stroke="{t["highlight"]}" stroke-width="1"/>'
         )
         self.front.append(
-            f'<circle cx="{cx}" cy="{y - 2}" r="21" fill="{t["card"]}" stroke="{c}" stroke-width="1.6"/>'
+            f'<circle cx="{cx}" cy="{y - 2}" r="21" fill="{t["card"]}" stroke="{t["strong"]}" '
+            f'stroke-width="1.2"/>'
+            f'<circle cx="{cx}" cy="{y - 7}" r="6" fill="{t["faint"]}"/>'
+            f'<path d="M{cx - 11},{y + 11} a11,9 0 0 1 22,0" fill="{t["faint"]}"/>'
         )
-        self.front.append(
-            f'<circle cx="{cx}" cy="{y - 7}" r="6.5" fill="{c}"/>'
-            f'<path d="M{cx - 11},{y + 11} a11,9 0 0 1 22,0" fill="{c}"/>'
-        )
-        self.text(cx, y + 42, "PERSON", 11, 500, c, MONO, "middle", 1.2)
-        self.text(cx, y + 68, title, 19, 700, anchor="middle")
+        self.text(cx, y + 42, "PERSON", 11, 500, t["faint"], MONO, "middle", 1.0)
+        self.text(cx, y + 68, title, 19, 500, anchor="middle", spacing=-0.3)
         for i, ln in enumerate(lines):
             self.text(cx, y + 93 + i * 19, ln, 14, 400, t["muted"], anchor="middle")
         self._fits(f"person {title!r} title", title, 19, w - 30)
@@ -369,43 +392,52 @@ class Canvas:
         self, x, y, w, h, color, eyebrow, title, icons=(), tab="left", dash=True
     ):
         t = self.t
-        d = ' stroke-dasharray="8 7"' if dash else ""
+        d = ' stroke-dasharray="7 6"' if dash else ""
         self.back.append(
-            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="22" fill="{color}" fill-opacity="0.045" '
-            f'stroke="{color}" stroke-opacity="0.75" stroke-width="1.6"{d}/>'
+            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="{t["text"]}" '
+            f'fill-opacity="0.018" stroke="{t["strong"]}" stroke-width="1.2"{d}/>'
         )
-        tw = 26 + len(icons) * 30 + len(eyebrow) * 8.4 + len(title) * 8.9 + 26
+        ew = text_width(eyebrow, 11.5, True) + 0.9 * len(eyebrow)
+        tw = 22 + len(icons) * 28 + ew + 14 + text_width(title, 14.5) + 18
         tx = x + 28 if tab == "left" else x + w - 28 - tw
-        self._box("tab", title, tx, y - 17, tw, 34)
+        self._box("tab", title, tx, y - 15, tw, 30)
         self._quiet += 1
         self.back.append(
-            f'<rect x="{tx}" y="{y - 17}" width="{tw:.0f}" height="34" rx="17" fill="{t["bg"]}" '
-            f'stroke="{color}" stroke-opacity="0.75" stroke-width="1.4"/>'
+            f'<rect x="{tx:.1f}" y="{y - 15}" width="{tw:.0f}" height="30" rx="3" '
+            f'fill="{t["plate"]}" stroke="{t["strong"]}" stroke-width="1.1"/>'
         )
-        cx = tx + 14
+        cx = tx + 13
         for slug in icons:
             if slug in ICONS:
-                self.logo(slug, cx, y - 9, 18, layer=self.back)
-            cx += 30
+                self.logo(slug, cx, y - 8, 16, layer=self.back)
+            cx += 28
         self.text(
-            cx, y + 5, eyebrow, 12, 500, color, MONO, spacing=1.1, layer=self.back
+            cx,
+            y + 4.5,
+            eyebrow,
+            11.5,
+            500,
+            t["faint"],
+            MONO,
+            spacing=0.9,
+            layer=self.back,
         )
-        cx += len(eyebrow) * 8.4 + 12
-        self.text(cx, y + 5.5, title, 15, 600, t["text"], layer=self.back)
+        cx += ew + 14
+        self.text(cx, y + 5, title, 14.5, 500, t["text"], layer=self.back)
         self._quiet -= 1
 
     # arrows ----------------------------------------------------------------
-    def arrow(self, pts, color=None, width=1.8, dashed=False, halo=False, head=True):
+    def arrow(self, pts, color=None, width=1.6, dashed=False, halo=False, head=True):
         t = self.t
         self.arrows.append([(float(a), float(b)) for a, b in pts])
-        c = color or t["line"]
+        c = color or t["arrow"]
         mk = self.marker(c) if head else None
         d = "M" + " L".join(f"{px},{py}" for px, py in pts)
         if halo:
             self.mid.append(
-                f'<path d="{d}" fill="none" stroke="{t["halo"]}" stroke-width="9" stroke-linecap="round"/>'
+                f'<path d="{d}" fill="none" stroke="{t["plate"]}" stroke-width="8" stroke-linecap="round"/>'
             )
-        dash = ' stroke-dasharray="6 6"' if dashed else ""
+        dash = ' stroke-dasharray="6 5"' if dashed else ""
         m = f' marker-end="url(#{mk})"' if mk else ""
         self.mid.append(
             f'<path d="{d}" fill="none" stroke="{c}" stroke-width="{width}" '
@@ -424,22 +456,22 @@ class Canvas:
         return self._markers[color]
 
     def label(self, x, y, lines, anchor="middle", tech=None, color=None):
-        """Relationship label: pill with 1–2 lines + optional [technology] line."""
+        """Relationship label: a small printed plate, verb in grotesk, technology in mono."""
         t = self.t
         rows = [
             (s, 13.5, 500, t["text"] if color is None else color, SANS) for s in lines
         ]
         if tech:
-            rows.append((tech, 12, 400, t["muted"], MONO))
-        wmax = max(len(r[0]) * (r[1] * (0.6 if r[4] == MONO else 0.53)) for r in rows)
+            rows.append((tech, 12, 400, t["faint"], MONO))
+        wmax = max(text_width(r[0], r[1], r[4] == MONO) for r in rows)
         h = 12 + 18 * len(rows)
-        w = wmax + 24
+        w = wmax + 22
         bx = x - w / 2 if anchor == "middle" else (x - w if anchor == "end" else x)
         self._box("label", " / ".join(lines), bx, y - h / 2, w, h)
         self._quiet += 1
         self.front.append(
-            f'<rect x="{bx:.1f}" y="{y - h / 2:.1f}" width="{w:.1f}" height="{h}" rx="9" '
-            f'fill="{t["bg"]}" fill-opacity="0.94" stroke="{t["border"]}" stroke-width="1"/>'
+            f'<rect x="{bx:.1f}" y="{y - h / 2:.1f}" width="{w:.1f}" height="{h}" rx="3" '
+            f'fill="{t["plate"]}" stroke="{t["line"]}" stroke-width="1"/>'
         )
         cx = bx + w / 2
         for i, (s, sz, wt, col, fam) in enumerate(rows):
@@ -447,8 +479,19 @@ class Canvas:
         self._quiet -= 1
 
     # page ------------------------------------------------------------------
+    LEVELS = (
+        ("L1", "CONTEXT"),
+        ("L2", "CONTAINER"),
+        ("L3", "COMPONENT"),
+        ("D", "DEPLOY"),
+    )
+
     def header(self, eyebrow, title, subtitle, stack):
+        """Silkscreen eyebrow and a lowercase grotesk title (as on the banner); on the right
+        the always-dark display: a four-step sequencer of the C4 views with the playhead on
+        this one, and the stack printed under it."""
         t = self.t
+        title = title.lower()
         self._box(
             "header",
             title,
@@ -457,23 +500,46 @@ class Canvas:
             max(text_width(title, 40) + 10, text_width(subtitle, 17.5)),
             115,
         )
-        self._box(
-            "stack",
-            "stack",
-            self.w - 60 - len(stack) * 52 + 8,
-            40,
-            len(stack) * 52 - 8,
-            74,
-        )
         self._quiet += 1
-        self.text(60, 66, eyebrow, 14, 500, t["ana"], MONO, spacing=1.6)
-        self.text(60, 112, title, 40, 800, spacing=-0.6)
+        self.text(60, 66, eyebrow, 13, 500, t["faint"], MONO, spacing=1.3)
+        self.text(60, 112, title, 40, 500, spacing=-1.4)
         self.text(60, 146, subtitle, 17.5, 400, t["muted"])
-        x = self.w - 60 - len(stack) * 52 + 8
+        e = eyebrow.upper()
+        cur = (
+            0 if "LEVEL 1" in e else 1 if "LEVEL 2" in e else 2 if "LEVEL 3" in e else 3
+        )
+        dw = max(520, len(stack) * 34 + 40)
+        dx, dy, dh = self.w - 60 - dw, 38, 104
+        self._box("stack", "display", dx, dy, dw, dh)
+        self.front.append(
+            f'<rect x="{dx}" y="{dy}" width="{dw}" height="{dh}" rx="12" fill="{t["display"]}" '
+            f'stroke="{t["strong"]}" stroke-width="1"/>'
+            f'<rect x="{dx + 3}" y="{dy + 3}" width="{dw - 6}" height="{dh - 6}" rx="10" fill="none" '
+            f'stroke="#000" stroke-opacity="0.6" stroke-width="2"/>'
+        )
+        pw = (dw - 40 - 3 * 8) / 4
+        for i, (code, name) in enumerate(self.LEVELS):
+            px = dx + 20 + i * (pw + 8)
+            on = i == cur
+            self.text(
+                px,
+                dy + 24,
+                f"{code} · {name}",
+                10.5,
+                500,
+                "#ebe9e4" if on else t["display_dim"],
+                MONO,
+                spacing=0.6,
+            )
+            self.front.append(
+                f'<rect x="{px:.1f}" y="{dy + 32}" width="{pw:.1f}" height="16" rx="3" '
+                f'fill="{"#ebe9e4" if on else t["display_off"]}"/>'
+            )
+        x = dx + 20
         for slug in stack:
-            self.tile(slug, x, 70, 44)
-            x += 52
-        self.text(self.w - 60, 52, "STACK", 11.5, 500, t["faint"], MONO, "end", 1.4)
+            if slug in ICONS:
+                self.logo(slug, x, dy + 64, 22, color=t["display_dim"])
+            x += 34
         self._quiet -= 1
 
     def legend(
@@ -483,12 +549,8 @@ class Canvas:
         kinds=("person", "container", "store", "external", "boundary", "rel"),
         items=None,
     ):
-        """Key at the bottom. ``items`` lists exactly what the diagram uses, e.g.
-        [("person", "person", "Person"), ("card", "ops", "Application container"),
-         ("store", "gold", "Data store"), ("card", "ext", "External system"),
-         ("boundary", "ops", "Deployment boundary"), ("rel", "line", "Uses / calls"),
-         ("rel_dashed", "line", "Optional / async")].
-        Without ``items`` the generic key from ``kinds`` is drawn."""
+        """Key at the bottom, listing exactly what the diagram uses. Kinds: person, card, store,
+        boundary, rel, rel_dashed; a card with colour key "ext" is external, "ok" is a gate."""
         t = self.t
         self._quiet += 1
         if items is None:
@@ -499,47 +561,49 @@ class Canvas:
                 "store": ("store", "gold", "Data store"),
                 "external": ("card", "ext", "External system"),
                 "boundary": ("boundary", "ana", "Boundary"),
-                "rel": ("rel", "line", "Uses / data flow"),
+                "rel": ("rel", "line", "Uses"),
             }
             items = [generic[k] for k in kinds]
         x = 60
         for kind, col, label in items:
-            c = t[col]
             if kind == "person":
                 self.front.append(
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="9" fill="none" stroke="{c}" stroke-width="1.6"/>'
+                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="7" fill="{t["card"]}" '
+                    f'stroke="{t["strong"]}" stroke-width="1.2"/>'
                 )
             elif kind == "card":
+                gate, ext = col == "ok", col == "ext"
+                edge = t["signal"] if gate else t["line"]
+                dash = ' stroke-dasharray="4 3"' if ext else ""
                 self.front.append(
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="4" fill="{t["card"]}" stroke="{t["border"]}"/>'
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="3.5" fill="{c}"/>'
+                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="3" fill="{t["card"]}" '
+                    f'stroke="{edge}" stroke-width="{1.6 if gate else 1.1}"{dash}/>'
+                    f'<rect x="{x + 5}" y="{y - 8}" width="6" height="6" rx="1.5" '
+                    f'fill="{t["signal"] if gate else t["led_off"]}"/>'
                 )
             elif kind == "store":
                 self.front.append(
-                    f'<path d="M{x},{y - 10} a13,4 0 0 1 26,0 v12 a13,4 0 0 1 -26,0 Z" fill="{t["card"]}" stroke="{c}" stroke-width="1.4"/>'
+                    f'<path d="M{x},{y - 10} a13,4 0 0 1 26,0 v12 a13,4 0 0 1 -26,0 Z" '
+                    f'fill="{t["card"]}" stroke="{t["strong"]}" stroke-width="1.2"/>'
                 )
             elif kind == "boundary":
                 self.front.append(
-                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="5" fill="{c}" fill-opacity="0.06" stroke="{c}" stroke-dasharray="4 3" stroke-width="1.4"/>'
+                    f'<rect x="{x}" y="{y - 13}" width="26" height="18" rx="4" fill="none" '
+                    f'stroke="{t["strong"]}" stroke-dasharray="4 3" stroke-width="1.2"/>'
                 )
             elif kind in ("rel", "rel_dashed"):
                 dash = ' stroke-dasharray="5 4"' if kind == "rel_dashed" else ""
                 self.front.append(
-                    f'<path d="M{x},{y - 4} H{x + 22}" stroke="{c}" stroke-width="1.8"{dash} marker-end="url(#{self.marker(c)})"/>'
+                    f'<path d="M{x},{y - 4} H{x + 22}" stroke="{t["arrow"]}" stroke-width="1.6"{dash} '
+                    f'marker-end="url(#{self.marker(t["arrow"])})"/>'
                 )
-            self.text(x + 36, y + 1, label, 13.5, 500, t["muted"])
+            self.text(x + 36, y + 1, label, 13.5, 400, t["muted"])
             x += 36 + text_width(label, 13.5) + 30
-        self.text(60, y - 34, "LEGEND", 11.5, 500, t["faint"], MONO, spacing=1.4)
-        self.text(self.w - 60, y + 1, items_note, 13, 400, t["faint"], MONO, "end")
+        self.text(60, y - 34, "LEGEND", 11.5, 500, t["faint"], MONO, spacing=1.2)
+        self.text(self.w - 60, y + 1, items_note, 12.5, 400, t["faint"], MONO, "end")
         self._box("legend", "legend", 60, y - 48, x - 60, 56)
-        self._box(
-            "legend-note",
-            items_note,
-            self.w - 60 - text_width(items_note, 13, True),
-            y - 12,
-            text_width(items_note, 13, True),
-            16,
-        )
+        nw = text_width(items_note, 12.5, True)
+        self._box("legend-note", items_note, self.w - 60 - nw, y - 12, nw, 16)
         self._quiet -= 1
 
     # quality gate ------------------------------------------------------------
@@ -607,23 +671,26 @@ class Canvas:
         return sorted(set(out))
 
     def svg(self, title, desc) -> str:
+        """The faceplate: a plate on the bench with four corner screws (the banner's hardware)."""
         t = self.t
-        grid = (
-            f'<pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse">'
-            f'<circle cx="1" cy="1" r="1" fill="{t["grid"]}"/></pattern>'
-        )
-        sh_op = 0.35 if self.theme == "dark" else 0.07
-        shadow = (
-            f'<filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">'
-            f'<feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#000" flood-opacity="{sh_op}"/></filter>'
-        )
+        w, h = self.w, self.h
+        screws = []
+        for sx, sy in ((26, 26), (w - 26, 26), (26, h - 26), (w - 26, h - 26)):
+            screws.append(
+                f'<circle cx="{sx}" cy="{sy}" r="7" fill="{t["card2"]}" stroke="{t["strong"]}" '
+                f'stroke-width="1"/><path d="M{sx - 4.2},{sy + 4.2} L{sx + 4.2},{sy - 4.2}" '
+                f'stroke="{t["strong"]}" stroke-width="1.4" stroke-linecap="round"/>'
+            )
         return (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.w}" height="{self.h}" '
-            f'viewBox="0 0 {self.w} {self.h}" role="img" aria-labelledby="t d">'
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+            f'viewBox="0 0 {w} {h}" role="img" aria-labelledby="t d">'
             f'<title id="t">{escape(title)}</title><desc id="d">{escape(desc)}</desc>'
-            f"<defs><style>{font_css()}</style>{grid}{shadow}{''.join(self.defs)}</defs>"
-            f'<rect width="100%" height="100%" fill="{t["bg"]}"/>'
-            f'<rect width="100%" height="100%" fill="url(#grid)"/>'
+            f"<defs><style>{font_css()}</style>{''.join(self.defs)}</defs>"
+            f'<rect width="100%" height="100%" fill="{t["bench"]}"/>'
+            f'<rect x="8" y="8" width="{w - 16}" height="{h - 16}" rx="16" fill="{t["plate"]}" '
+            f'stroke="{t["strong"]}" stroke-width="1"/>'
+            f'<path d="M24,9.5 H{w - 24}" stroke="{t["highlight"]}" stroke-width="1"/>'
+            + "".join(screws)
             + "".join(self.back)
             + "".join(self.mid)
             + "".join(self.front)

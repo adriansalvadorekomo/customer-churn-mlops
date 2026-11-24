@@ -136,7 +136,7 @@ def context(theme: str) -> str:
         "github.com/adriansalvadorekomo/customer-churn-mlops",
         items=[
             ("person", "person", "Person"),
-            ("card", "ana", "Software system"),
+            ("card", "ops", "Software system"),
             ("card", "ext", "External system or data"),
             ("rel", "line", "Uses"),
         ],
@@ -151,7 +151,7 @@ def context(theme: str) -> str:
 
 def container(theme: str) -> str:
     WC = 2300
-    c = Canvas(WC, 1960, theme)
+    c = Canvas(WC, 2040, theme)
     t = c.t
     c.header(
         "C4 MODEL  ·  LEVEL 2  ·  CONTAINER DIAGRAM",
@@ -178,7 +178,7 @@ def container(theme: str) -> str:
         40,
         420,
         2160,
-        1260,
+        1330,
         t["ops"],
         "DOCKER COMPOSE",
         "churn-mlops",
@@ -192,10 +192,10 @@ def container(theme: str) -> str:
         CW[0],
         190,
         t["ops"],
-        "CONTAINER · WEB APP",
+        "CONTAINER · STATIC WEB APP",
         "Churn Desk",
-        "Astro · nginx · :4321",
-        ["Intake sheet → verdict, a local", "ledger and the model report"],
+        "Astro build · nginx · :4321",
+        ["nginx only serves files; the desk", "runs in the analyst's browser"],
         icons=("astro", "nginx"),
     )
     c.card(
@@ -219,7 +219,7 @@ def container(theme: str) -> str:
         "CONTAINER · ORCHESTRATOR",
         "Prefect server",
         "prefect 3.8.8 · :4200",
-        ["Deployments, schedules", "and run state (UI + API)"],
+        ["Deployments, schedules, run", "state; volume prefect-data"],
         icons=("prefect",),
     )
     c.card(
@@ -231,7 +231,7 @@ def container(theme: str) -> str:
         "CONTAINER · TRACKING",
         "MLflow server",
         "mlflow 3.17.1 · :5000",
-        ["Params, accuracy and model", "of every training run"],
+        ["SQLite + proxied artifacts", "on volume mlflow-data"],
         icons=("mlflow",),
     )
     # row B: the worker and its stores
@@ -288,7 +288,7 @@ def container(theme: str) -> str:
     c.label(2245, 360, ["Reads"], tech=":5601")
     # serving
     c.arrow([(510, 595), (667, 595)], halo=True)
-    c.label(588, 595, ["POST /predict"], tech="JSON")
+    c.label(588, 595, ["POST /predict", "from the browser"], tech="JSON · CORS")
     c.arrow([(cx[1], RA + 190), (cx[1], RB - 3)], halo=True)
     c.label(cx[1], 770, ["Loads at start"], tech="joblib")
     # pipeline
@@ -297,7 +297,7 @@ def container(theme: str) -> str:
         cx[2], 770, ["Serves deployments,", "reports run state"], tech="Prefect API"
     )
     c.arrow([(1580, RB - 3), (1580, 800), (cx[3], 800), (cx[3], RA + 193)], halo=True)
-    c.label(1800, 800, ["Logs every run"], tech="MLflow REST")
+    c.label(1800, 800, ["Logs params, metric", "and the model"], tech="MLflow REST")
     c.arrow([(X[2] - 3, 950), (X[1] + CW[1] + 3, 950)], halo=True)
     c.label(1150, 950, ["Writes"])
     c.arrow([(X[2] + CW[2], 990), (X[3] - 3, 990)], halo=True)
@@ -308,7 +308,7 @@ def container(theme: str) -> str:
         70,
         1190,
         2100,
-        420,
+        520,
         t["dlv"],
         "PROFILE · MONITORING",
         "docker compose --profile monitoring up -d",
@@ -364,21 +364,42 @@ def container(theme: str) -> str:
         ["Churn MLOps · monitoring:", "traffic, predictions, quality"],
         icons=("kibana",),
     )
-    # events: API and worker stdout → Filebeat
-    c.arrow([(X[1] - 3, 650), (600, 650), (600, 1120)], dashed=True, head=False)
-    c.arrow([(cx[2], RB + 203), (cx[2], 1120)], dashed=True, head=False)
-    c.arrow([(cx[2], 1120), (300, 1120), (300, RC - 3)], dashed=True)
-    c.label(980, 1120, ["JSON events on stdout"], tech="src/observability.py")
+    # Filebeat tails the Docker logs of the API and the worker (autodiscover by label)
+    c.arrow([(300, RC), (300, 1120), (cx[2], 1120), (cx[2], RB + 203)], dashed=True)
+    c.arrow([(600, 1120), (600, 650), (X[1] - 3, 650)], dashed=True)
+    c.label(
+        980,
+        1120,
+        ["Tails their Docker logs:", "JSON events on stdout"],
+        tech="label churn_logs",
+    )
     c.arrow([(X[0] + CW[0], 1370), (X[1] - 3, 1370)], halo=True)
     c.label(590, 1370, ["Ships"], tech="beats")
     c.arrow([(X[1] + CW[1], 1370), (X[2] - 3, 1370)], halo=True)
     c.label(1150, 1370, ["Indexes"])
     c.arrow([(X[3], 1370), (X[2] + CW[2] + 3, 1370)], halo=True)
     c.label(1680, 1370, ["Queries"])
+    c.card(
+        1450,
+        1540,
+        460,
+        150,
+        t["dlv"],
+        "CONTAINER · ONE-SHOT",
+        "monitoring-setup",
+        "backend image · setup.py",
+        ["Index template, data view", "and the Kibana dashboard"],
+        title_size=19,
+    )
+    c.arrow([(1500, 1537), (1500, RC + 203)])
+    c.label(1500, 1505, ["Template"])
+    c.arrow([(1860, 1537), (1860, RC + 203)])
+    c.label(1860, 1505, ["Dashboard"])
+    c.text(100, 1600, "Local only: Elastic security off;", 14, 400, t["muted"], MONO)
     c.text(
         100,
-        1572,
-        "Local only: Elastic security off; every monitoring port is bound to 127.0.0.1.",
+        1626,
+        "every monitoring port is bound to 127.0.0.1.",
         14,
         400,
         t["muted"],
@@ -387,7 +408,7 @@ def container(theme: str) -> str:
 
     c.text(
         60,
-        1735,
+        1805,
         "A retrained model lands in ./models; `docker compose restart backend` serves it.",
         15,
         400,
@@ -396,7 +417,16 @@ def container(theme: str) -> str:
     )
     c.text(
         60,
-        1765,
+        1835,
+        "The desk calls the API URL baked at build time (PUBLIC_API_URL, default http://localhost:8000).",
+        15,
+        400,
+        t["muted"],
+        MONO,
+    )
+    c.text(
+        60,
+        1865,
         "A tracking outage is a warning, never a pipeline failure (src/tracking.py).",
         15,
         400,
@@ -404,32 +434,32 @@ def container(theme: str) -> str:
         MONO,
     )
     c.legend(
-        1895,
+        1975,
         "docker-compose.yml · deploiement_prefect.py · monitoring/",
         items=[
             ("person", "person", "Person"),
-            ("card", "ops", "Serving"),
-            ("card", "ana", "Orchestration and tracking"),
-            ("card", "dlv", "Monitoring (opt-in)"),
+            ("card", "ops", "Container"),
             ("store", "gold", "Data store"),
             ("boundary", "ops", "Deployment boundary"),
             ("rel", "line", "Uses"),
-            ("rel_dashed", "line", "Log events"),
+            ("rel_dashed", "line", "Reads logs"),
         ],
     )
     return c.svg(
         "Customer Churn MLOps — C4 Level 2, containers",
-        "In Docker Compose, an analyst uses the Churn Desk (Astro and nginx, port 4321), which calls the FastAPI "
-        "prediction API (port 8000); the API loads classifier.joblib from the ./models volume. The worker, built from "
+        "In Docker Compose, nginx serves the static Churn Desk (port 4321); it runs in the analyst's browser, which "
+        "calls the FastAPI prediction API (port 8000) directly, cross-origin. The API loads classifier.joblib from the "
+        "./models volume at start. The worker, built from "
         "the same image, serves the three Prefect deployments against the Prefect server (port 4200), reads "
         "Churn_Modelling.csv, writes the model to ./models and logs every run to MLflow (port 5000). In the opt-in "
-        "monitoring profile, the API and the worker print JSON events that Filebeat ships to Logstash, which indexes "
-        "them in Elasticsearch for the Kibana dashboard (port 5601) read by the ML engineer.",
+        "monitoring profile, Filebeat tails the Docker logs of the API and the worker and ships their JSON events to "
+        "Logstash, which indexes them in Elasticsearch; a one-shot setup container creates the index template and the "
+        "Kibana dashboard (port 5601) read by the ML engineer.",
     )
 
 
 def component(theme: str) -> str:
-    c = Canvas(W, 1360, theme)
+    c = Canvas(W, 1600, theme)
     t = c.t
     c.header(
         "C4 MODEL  ·  LEVEL 3  ·  COMPONENTS",
@@ -441,7 +471,7 @@ def component(theme: str) -> str:
         40,
         270,
         2120,
-        960,
+        920,
         t["ana"],
         "CONTAINER",
         "Worker · src/ + deploiement_prefect.py",
@@ -548,78 +578,77 @@ def component(theme: str) -> str:
     c.arrow([(500, 770), (gx - 3, 770)], halo=True)
     c.label(gx - 45, 770, ["2 · jobs"])
 
+    # inside the worker: tracking.py and observability.py, called by flows.py after a run
+    ex = gx + gw + gap
     c.card(
         gx,
         930,
         gw,
-        180,
+        170,
         t["ana"],
         "COMPONENT",
         "Tracking",
         "src/tracking.py",
-        ["params, accuracy, sklearn model", "outage → warning, not failure"],
+        ["params, accuracy, sklearn model;", "outage → warning, not failure"],
         icons=("mlflow",),
         title_size=19,
     )
-    c.arrow(
-        [
-            (gx + gw + gap + gw / 2, 823),
-            (gx + gw + gap + gw / 2, 880),
-            (gx + gw / 2, 880),
-            (gx + gw / 2, 927),
-        ]
-    )
-    c.card(
-        gx + 3 * (gw + gap),
-        930,
-        gw,
-        180,
-        t["gold"],
-        "DATA STORE",
-        "models/classifier.joblib",
-        "host volume",
-        ["read by the API at start"],
-        shape="cylinder",
-        title_size=19,
-    )
-    c.arrow([(gx + 3 * (gw + gap) + gw / 2, 823), (gx + 3 * (gw + gap) + gw / 2, 927)])
-    c.card(
-        gx + gw + gap,
-        930,
-        gw,
-        180,
-        t["ext"],
-        "CONTAINER · OUTSIDE THIS ONE",
-        "MLflow server",
-        "experiment: customer-churn",
-        ["one run per training:", "params, accuracy, model"],
-        icons=("mlflow",),
-        title_size=19,
-    )
-    ex = gx + 2 * (gw + gap)
     c.card(
         ex,
         930,
         gw,
-        180,
+        170,
         t["dlv"],
         "COMPONENT",
         "Events",
         "src/observability.py",
-        ["training_run / evaluation_run:", "accuracy, recall, duration → stdout"],
-        icons=("elastic",),
+        ["training_run / evaluation_run", "as one JSON line on stdout"],
         title_size=19,
     )
-    c.arrow([(ex + gw / 2, 823), (ex + gw / 2, 927)])
-    c.arrow([(gx + gw, 1020), (gx + gw + gap - 3, 1020)])
+    c.arrow([(290, 860), (290, 885), (ex + gw / 2, 885)], head=False)
+    c.arrow([(gx + gw / 2, 885), (gx + gw / 2, 927)])
+    c.arrow([(ex + gw / 2, 885), (ex + gw / 2, 927)])
+    c.label(440, 885, ["After a run: log it,", "emit the event"])
+
+    # outside the worker container
+    sx = gx + 3 * (gw + gap)
+    c.card(
+        gx,
+        1270,
+        gw,
+        170,
+        t["ext"],
+        "CONTAINER · OUTSIDE THIS ONE",
+        "MLflow server",
+        "experiment: customer-churn",
+        ["one run per training: params,", "accuracy and the model"],
+        icons=("mlflow",),
+        title_size=19,
+    )
+    c.card(
+        sx,
+        1270,
+        gw,
+        170,
+        t["gold"],
+        "DATA STORE · HOST VOLUME",
+        "./models",
+        "classifier.joblib",
+        ["read by the API at start"],
+        shape="cylinder",
+        title_size=19,
+    )
+    c.arrow([(gx + gw / 2, 1100), (gx + gw / 2, 1267)], halo=True)
+    c.label(gx + gw / 2, 1225, ["Logs runs"], tech="MLflow REST")
+    c.arrow([(sx + gw / 2, 823), (sx + gw / 2, 1267)], halo=True)
+    c.label(sx + gw / 2, 1225, ["Writes, reads"], tech="joblib")
 
     c.legend(
-        1300,
+        1535,
         "src/flows.py · src/tasks.py · src/model_pipeline.py · src/tracking.py",
         items=[
-            ("card", "ana", "Component"),
-            ("card", "ok", "Blocking code gate"),
-            ("card", "dlv", "Monitoring events"),
+            ("card", "ops", "Component"),
+            ("card", "ok", "Gate: one failure stops the flow"),
             ("card", "ext", "Other container"),
             ("store", "gold", "Data store"),
             ("boundary", "ana", "Container boundary"),
@@ -630,7 +659,8 @@ def component(theme: str) -> str:
         "Customer Churn MLOps — C4 Level 3, pipeline components",
         "Three deployments trigger the flows. The full flow runs four blocking code gates (ruff format, ruff "
         "check, bandit, pytest), then prepare-data, train-model (RandomForest, 100 trees), evaluate-model "
-        "(85.55% accuracy, recall 0.42) and save/load with joblib; tracking.py logs each training run to MLflow.",
+        "(85.55% accuracy, recall 0.42) and save/load with joblib. After a run, flows.py logs it to MLflow through "
+        "tracking.py and prints a JSON event through observability.py.",
     )
 
 
@@ -639,7 +669,7 @@ if __name__ == "__main__":
         HERE,
         (
             ("context", context, (W, 1000)),
-            ("container", container, (2300, 1960)),
-            ("component", component, (W, 1360)),
+            ("container", container, (2300, 2040)),
+            ("component", component, (W, 1600)),
         ),
     )

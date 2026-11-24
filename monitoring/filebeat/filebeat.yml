@@ -1,0 +1,26 @@
+# Filebeat: ship the stdout of this stack's backend and worker containers to Logstash.
+# Docker writes container stdout as JSON-lines files; autodiscover picks only the
+# containers labelled churn_logs=true in docker-compose.yml (backend and worker),
+# so nothing else on the host is collected, whatever the compose project name.
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      templates:
+        - condition:
+            equals.docker.container.labels.churn_logs: "true"
+          config:
+            - type: filestream
+              id: churn-${data.docker.container.id}
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              parsers:
+                - container: ~
+              prospector.scanner.symlinks: true
+              fields:
+                container_name: ${data.docker.container.name}
+              fields_under_root: true
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: warning

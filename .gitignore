@@ -29,3 +29,6 @@ frontend/.astro/
 
 # Design tooling state (PRODUCT.md / DESIGN.md stay tracked)
 .impeccable/
+
+# CI artifact
+bandit-report.json

@@ -1,0 +1,44 @@
+# The four code gates of the Prefect flows (src/tasks.py), on every push and pull request.
+name: gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.4.0   # no floating major tag is published
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Format (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Security (bandit, config in pyproject.toml)
+        run: |
+          uv run bandit -c pyproject.toml -r . -f json -o bandit-report.json --exit-zero
+          uv run bandit -c pyproject.toml -r .
+
+      - name: Upload the Bandit report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+      - name: Tests (pytest)
+        run: uv run pytest -q

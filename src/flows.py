@@ -14,6 +14,7 @@ Run locally (no server needed)::
 Or schedule them daily (see ``deploiement_prefect.py``).
 """
 
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,7 @@ from src.model_pipeline import (
     DEFAULT_REQUIREMENTS_PATH,
     FEATURE_COLS,
 )
+from src.observability import churner_recall, emit, get_logger
 from src.tasks import (
     REPO_BRANCH_DEFAULT,
     REPO_URL_DEFAULT,
@@ -41,6 +43,8 @@ from src.tasks import (
     unittest_task,
 )
 from src.tracking import log_training_run
+
+events = get_logger("pipeline")
 
 # Same demo customer as main.py / the notebook's manual predict cell.
 DEMO_SAMPLE = [[850, 0, 43, 2, 125510.82, 1, 1, 1, 79084.10]]
@@ -77,6 +81,7 @@ def all_flow(
 ) -> dict:
     """Full pipeline: fetch → install → gates → prepare → train →
     evaluate → save → load. Returns metrics + artifact paths."""
+    start = time.perf_counter()
     _maybe_fetch(fetch_code, repo_url, branch)
 
     if run_install:
@@ -107,6 +112,15 @@ def all_flow(
     reloaded = load_task(filepath=model_path)
     demo_pred = reloaded.predict(pd.DataFrame(DEMO_SAMPLE, columns=FEATURE_COLS))
     print(f"Reloaded model demo predict → Exited={demo_pred[0]}")
+    emit(
+        events,
+        "training_run",
+        flow="all",
+        accuracy=round(float(metrics["accuracy"]), 4),
+        recall_churn=churner_recall(metrics["confusion_matrix"].tolist()),
+        n_estimators=n_estimators,
+        duration_s=round(time.perf_counter() - start, 3),
+    )
 
     return {
         "accuracy": metrics["accuracy"],
@@ -127,6 +141,7 @@ def train_flow(
     n_estimators: int = 100,
 ) -> dict:
     """Prepare the data and train the model, then save it."""
+    start = time.perf_counter()
     _maybe_fetch(fetch_code, repo_url, branch)
 
     X_train, X_test, y_train, y_test = prepare_task(csv_path=data, test_size=test_size)
@@ -139,6 +154,14 @@ def train_flow(
         X_test,
         y_test,
         {"n_estimators": n_estimators, "test_size": test_size},
+    )
+    emit(
+        events,
+        "training_run",
+        flow="train",
+        accuracy=None if accuracy is None else round(float(accuracy), 4),
+        n_estimators=n_estimators,
+        duration_s=round(time.perf_counter() - start, 3),
     )
     return {
         "train_shape": list(X_train.shape),
@@ -158,11 +181,20 @@ def evaluat_flow(
     test_size: float = 0.2,
 ) -> dict:
     """Load a saved model and evaluate it on the test split."""
+    start = time.perf_counter()
     _maybe_fetch(fetch_code, repo_url, branch)
 
     _, X_test, _, y_test = prepare_task(csv_path=data, test_size=test_size)
     model = load_task(filepath=model_path)
     metrics = evaluate_task(model, X_test, y_test)
+    emit(
+        events,
+        "evaluation_run",
+        flow="evaluat",
+        accuracy=round(float(metrics["accuracy"]), 4),
+        recall_churn=churner_recall(metrics["confusion_matrix"].tolist()),
+        duration_s=round(time.perf_counter() - start, 3),
+    )
     return {
         "accuracy": metrics["accuracy"],
         "confusion_matrix": metrics["confusion_matrix"].tolist(),
